@@ -1,5 +1,12 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
+import { ThemeProvider } from "next-themes";
+
+import { Toaster } from "@/components/ui/sonner";
+import { siteConfig } from "@/lib/config";
+
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,9 +20,69 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Notes",
-  description:
-    "Forkable Next.js template featuring an AI-powered notes app",
+  metadataBase: new URL(siteConfig.url),
+  title: {
+    default: siteConfig.name,
+    template: `%s | ${siteConfig.name}`,
+  },
+  description: siteConfig.description,
+  openGraph: {
+    locale: "en-US",
+    type: "website",
+    url: siteConfig.url,
+    title: siteConfig.name,
+    description: siteConfig.description,
+    siteName: siteConfig.name,
+    images: [
+      {
+        url: `${siteConfig.url}/og.jpg`,
+        width: 1920,
+        height: 1080,
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: siteConfig.name,
+    description: siteConfig.description,
+    images: [
+      {
+        url: `${siteConfig.url}/og.jpg`,
+        width: 1920,
+        height: 1080,
+      },
+    ],
+    creator: siteConfig.creator,
+  },
+  icons: [
+    {
+      rel: "icon",
+      type: "image/png",
+      sizes: "96x96",
+      url: `${siteConfig.url}/favicon/favicon-96x96.png`,
+    },
+    {
+      rel: "icon",
+      type: "image/svg+xml",
+      url: `${siteConfig.url}/favicon/favicon.svg`,
+    },
+    {
+      rel: "shortcut icon",
+      url: `${siteConfig.url}/favicon/favicon.ico`,
+    },
+    {
+      rel: "apple-touch-icon",
+      sizes: "180x180",
+      url: `${siteConfig.url}/favicon/apple-touch-icon.png`,
+    },
+    {
+      rel: "manifest",
+      url: `${siteConfig.url}/favicon/site.webmanifest`,
+    },
+  ],
+  other: {
+    "apple-mobile-web-app-title": siteConfig.shortName,
+  },
 };
 
 export default function RootLayout({
@@ -24,11 +91,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+          <Toaster />
+        </ThemeProvider>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
