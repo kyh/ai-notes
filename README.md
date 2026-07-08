@@ -1,44 +1,49 @@
 # AI Notes
 
-AI-native notes — capture, organize, and rewrite your notes in natural language. A forkable Next.js template.
+AI-native notes — capture, organize, and rewrite your notes in natural language. A forkable Next.js template built on [eve](https://eve.dev), Vercel's agent framework.
 
 ## Features
 
 - **Two-pane notes app** — searchable, taggable notes list + markdown editor with live preview (tiny hand-rolled safe renderer, no markdown deps)
 - **AI assistant sidebar** — chat with your notes: summarize, tag, rewrite, reorganize, and query them in natural language
-- **Tool-driven mutations** — the agent creates/updates/deletes notes through typed tools; changes stream into the UI live (active note updates as you watch)
+- **Tool-driven mutations** — the agent creates/updates/deletes notes through typed eve tools; results stream into the UI live (active note updates as you watch)
 - **Local-first** — notes persist to localStorage (zod-validated), seeded with real content so the AI has something to work with
-- **Demo mode** — try the marquee flow without an API key ("Turn my week plan into a checklist")
+- **Bring your own key** — visitors add their own [Vercel AI Gateway key](https://vercel.com/docs/ai-gateway) (stored in the browser) and the agent runs on it per session
 
 ## Setup
 
 ```bash
 pnpm install
-echo "AI_GATEWAY_API_KEY=vck_..." > .env.local   # optional: SECRET_KEY=... for a shared sentinel key
+echo "AI_GATEWAY_API_KEY=vck_..." > .env.local
 pnpm dev
 ```
 
-In development the server uses `AI_GATEWAY_API_KEY` automatically. In production, users bring their own [Vercel AI Gateway key](https://vercel.com/docs/ai-gateway) (stored in the browser), or enter `demo` in the key dialog for the scripted offline demo.
+`pnpm dev` boots both runtimes: the Next.js dev server and eve's agent dev server (proxied same-origin by `withEve`). In development the agent uses `AI_GATEWAY_API_KEY`; in production, keyless visitors are prompted for their own gateway key, which rides each request as a bearer token and backs a per-session model.
 
 ## Architecture
 
 ```
-src/ai/
-├── gateway.ts                     # one provider factory: createModel(apiKey) → AI Gateway model
-├── agents/notes-agent.ts          # ToolLoopAgent + createNote/updateNote/deleteNote tools
-├── agents/notes-agent-prompt.ts   # system prompt
-├── messages/data-parts.ts         # zod schemas + DataPart map — the client<->server contract
-└── response/stream-chat-response.ts
-src/app/api/chat/route.ts          # zod-parsed body, validateUIMessages, key resolution
-src/components/chat/               # chat panel (useChat + onData), api key dialog, demo transport
-src/components/notes/              # app shell, list, editor, markdown preview
-src/lib/notes-context.ts           # app state shipped with each request (stateless server)
-src/lib/notes-store.ts             # zustand + localStorage persist
+agent/
+├── agent.ts             # defineAgent: gateway model + BYO-key dynamic model resolver
+├── instructions.md      # system prompt (incl. the per-turn context contract)
+├── channels/eve.ts      # HTTP auth: user bearer key → Vercel OIDC → localhost dev
+└── tools/
+    ├── create_note.ts   # defineTool — filename = tool name the model sees
+    ├── update_note.ts
+    ├── delete_note.ts
+    └── *.ts             # disableTool() sentinels for the built-in harness tools
+next.config.ts           # withEve(nextConfig) — mounts eve behind the Next.js origin
+src/lib/assistant-schemas.ts  # zod contract shared by agent tools + chat panel
+src/lib/notes-context.ts # per-turn app state (notes index + active note)
+src/components/chat/     # chat panel (useEveAgent bridge), api key dialog
+src/components/notes/    # app shell, list, editor, markdown preview
+src/lib/notes-store.ts   # zustand + localStorage persist
 ```
 
-The streaming contract: each agent tool writes a `data-*` part (`data-create-note`, `data-update-note`, `data-delete-note`); the client's `onData` zod-parses the payload and applies it to the store, so AI edits appear in the editor in real time. The demo transport (`@loremllm/transport` `StaticChatTransport`) replays the same wire format with no network.
+The streaming contract: the client sends the notes snapshot as eve `clientContext` on every turn (`send({ message, clientContext })`); each tool returns a structured payload the chat panel receives as an `action.result` stream event, zod-parses against `assistant-schemas.ts`, and applies to the zustand store — so AI edits appear in the editor in real time.
 
 ## Notes
 
 - UI: shadcn/ui **base-vega** style (Base UI primitives). Add components with `pnpm dlx shadcn@latest add <name>`.
 - Replace `public/og.jpg` and `public/favicon/` with your own brand assets before shipping a fork.
+- Never run `eve build` while `pnpm dev` is running — it corrupts eve's dev cache (fix: delete `.eve/` + `.workflow-data/` and restart).

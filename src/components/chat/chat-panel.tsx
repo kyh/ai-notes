@@ -1,27 +1,27 @@
 "use client";
 
 import * as React from "react";
-import { useChat } from "@ai-sdk/react";
+import type { EveMessage, EveMessagePart } from "eve/react";
+import { useEveAgent } from "eve/react";
 import { ArrowUpIcon, CheckIcon, KeyIcon, Loader2Icon, SparklesIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
+import { z } from "zod";
 
-import {
-  createNoteDataSchema,
-  deleteNoteDataSchema,
-  updateNoteDataSchema,
-} from "@/ai/messages/data-parts";
-import type { ChatUIMessage } from "@/ai/messages/types";
 import { MarkdownPreview } from "@/components/notes/markdown-preview";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { useLocalStorage } from "@/hooks/use-local-storage";
+import {
+  createNotePayloadSchema,
+  deleteNotePayloadSchema,
+  updateNotePayloadSchema,
+} from "@/lib/assistant-schemas";
 import type { NotesContext } from "@/lib/notes-context";
 import { useNotesStore, type NotePatch } from "@/lib/notes-store";
 import { cn } from "@/lib/utils";
 import { ApiKeyDialog, GATEWAY_API_KEY_STORAGE_KEY } from "./api-key-dialog";
-import { demoTransport } from "./demo-transport";
 
 const EXAMPLE_PROMPTS = [
   "Summarize my meeting notes",
@@ -48,6 +48,105 @@ const buildNotesContext = (): NotesContext => {
   };
 };
 
+/**
+ * BYO-key transport: the stored gateway key rides as a bearer header on
+ * every eve request (the channel verifier hands it to the dynamic model
+ * resolver). Read from localStorage on every request — eve captures this
+ * resolver once at store creation, so React state would go stale.
+ */
+const resolveAuthHeaders = (): Readonly<Record<string, string>> => {
+  if (typeof window === "undefined") return {};
+  const key = window.localStorage.getItem(GATEWAY_API_KEY_STORAGE_KEY);
+  return key !== null && key.length > 0 ? { authorization: `Bearer ${key}` } : {};
+};
+
+// -----------------------------------------------------------------------------
+// Tool results -> store mutations
+//
+// eve streams every tool result as an `action.result` event whose
+// `data.result` is `{ kind: "tool-result", toolName, output, isError? }`,
+// where `output` is the tool's full `execute` return value. Each payload is
+// zod-parsed against the shared schemas before touching the store.
+// -----------------------------------------------------------------------------
+
+const toolResultEventSchema = z.object({
+  type: z.literal("action.result"),
+  data: z.object({
+    status: z.enum(["completed", "failed", "rejected"]),
+    result: z.object({
+      kind: z.literal("tool-result"),
+      toolName: z.string(),
+      output: z.unknown(),
+      isError: z.boolean().optional(),
+    }),
+  }),
+});
+
+/** `subagent.event` wraps a child session's stream event under `data.event`. */
+const subagentEventSchema = z.object({
+  type: z.literal("subagent.event"),
+  data: z.object({ event: z.unknown() }),
+});
+
+const applyToolResult = (event: unknown): void => {
+  // Delegation is forbidden by the instructions, but if the model strays,
+  // unwrap the child's events so its tool results still reach the store.
+  const wrapped = subagentEventSchema.safeParse(event);
+  if (wrapped.success) {
+    applyToolResult(wrapped.data.data.event);
+    return;
+  }
+  const parsed = toolResultEventSchema.safeParse(event);
+  if (!parsed.success) return;
+  const { status, result } = parsed.data.data;
+  if (status !== "completed" || result.isError === true) return;
+
+  const store = useNotesStore.getState();
+  switch (result.toolName) {
+    case "create_note": {
+      const payload = createNotePayloadSchema.safeParse(result.output);
+      if (!payload.success) return;
+      store.insertNote(payload.data.note);
+      toast.success(`Created "${payload.data.note.title}"`);
+      break;
+    }
+    case "update_note": {
+      const payload = updateNotePayloadSchema.safeParse(result.output);
+      if (!payload.success) return;
+      const { id, title, content, tags } = payload.data;
+      const note = store.notes.find((n) => n.id === id);
+      if (!note) {
+        toast.error("The assistant tried to update a note that no longer exists");
+        return;
+      }
+      const patch: NotePatch = {};
+      if (title !== undefined) patch.title = title;
+      if (content !== undefined) patch.content = content;
+      if (tags !== undefined) patch.tags = tags;
+      store.updateNote(id, patch);
+      toast.success(`Updated "${patch.title ?? note.title}"`);
+      break;
+    }
+    case "delete_note": {
+      const payload = deleteNotePayloadSchema.safeParse(result.output);
+      if (!payload.success) return;
+      const note = store.notes.find((n) => n.id === payload.data.id);
+      if (!note) return;
+      store.deleteNote(note.id);
+      toast.success(`Deleted "${note.title}"`);
+      break;
+    }
+  }
+};
+
+/**
+ * Auth-shaped failures: a 401 from the channel (keyless in prod), a
+ * rejected gateway key at the model call, or a missing server key in dev.
+ * All of them route back to the key dialog.
+ */
+const isAuthError = (error: Error): boolean =>
+  /unauthorized|forbidden|authentication|api.?key|credential|401|403/i.test(error.message);
+
 interface ChatPanelProps {
   open: boolean;
   onClose: () => void;
@@ -59,71 +158,27 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
   const [apiKey, , removeApiKey] = useLocalStorage(GATEWAY_API_KEY_STORAGE_KEY, "");
   const bottomRef = React.useRef<HTMLDivElement>(null);
 
-  const { messages, sendMessage, status } = useChat<ChatUIMessage>({
-    id: apiKey === "" ? "keyless" : apiKey,
-    transport: apiKey === "demo" ? demoTransport : undefined,
+  const agent = useEveAgent({
+    headers: resolveAuthHeaders,
+    onEvent: applyToolResult,
     onError: (error) => {
-      const message = error.message.toLowerCase();
-      const isAuthError =
-        message.includes("unauthorized") ||
-        message.includes("authentication") ||
-        message.includes("invalid api key") ||
-        message.includes("gateway api key is required") ||
-        message.includes("401") ||
-        message.includes("403");
-      if (isAuthError) {
+      if (isAuthError(error)) {
         removeApiKey();
-        toast.error("Invalid API key. Please enter a valid Vercel Gateway API key.");
+        toast.error("Invalid API key. Please enter a valid Vercel AI Gateway API key.");
         setShowApiKeyDialog(true);
       } else {
         toast.error(error.message || "Something went wrong");
       }
     },
-    onData: (dataPart) => {
-      const store = useNotesStore.getState();
-      switch (dataPart.type) {
-        case "data-create-note": {
-          const parsed = createNoteDataSchema.safeParse(dataPart.data);
-          if (!parsed.success) return;
-          store.insertNote(parsed.data.note);
-          toast.success(`Created "${parsed.data.note.title}"`);
-          break;
-        }
-        case "data-update-note": {
-          const parsed = updateNoteDataSchema.safeParse(dataPart.data);
-          if (!parsed.success) return;
-          const { id, title, content, tags } = parsed.data;
-          const note = store.notes.find((n) => n.id === id);
-          if (!note) {
-            toast.error("The assistant tried to update a note that no longer exists");
-            return;
-          }
-          const patch: NotePatch = {};
-          if (title !== undefined) patch.title = title;
-          if (content !== undefined) patch.content = content;
-          if (tags !== undefined) patch.tags = tags;
-          store.updateNote(id, patch);
-          toast.success(`Updated "${patch.title ?? note.title}"`);
-          break;
-        }
-        case "data-delete-note": {
-          const parsed = deleteNoteDataSchema.safeParse(dataPart.data);
-          if (!parsed.success) return;
-          const note = store.notes.find((n) => n.id === parsed.data.id);
-          if (!note) return;
-          store.deleteNote(note.id);
-          toast.success(`Deleted "${note.title}"`);
-          break;
-        }
-      }
-    },
   });
+  const { data, status, error } = agent;
 
   const isLoading = status === "submitted" || status === "streaming";
+  const showKeyNotice = status === "error" && error !== undefined && isAuthError(error);
 
   React.useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, status]);
+  }, [data.messages, status]);
 
   const needsKey = !apiKey && process.env.NODE_ENV !== "development";
 
@@ -134,15 +189,7 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
       setShowApiKeyDialog(true);
       return;
     }
-    sendMessage(
-      { text: trimmed },
-      {
-        body: {
-          ...(apiKey ? { gatewayApiKey: apiKey } : {}),
-          notesContext: buildNotesContext(),
-        },
-      },
-    );
+    agent.send({ message: trimmed, clientContext: buildNotesContext() }).catch(() => undefined); // failures surface via status/error/onError
     setInput("");
   };
 
@@ -170,7 +217,7 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
 
         <ScrollArea className="min-h-0 flex-1">
           <div className="flex flex-col gap-4 p-4">
-            {messages.length === 0 ? (
+            {data.messages.length === 0 ? (
               <div className="flex flex-col gap-3 pt-6">
                 <p className="text-sm text-muted-foreground">
                   Ask about your notes, or have them rewritten, tagged, and reorganized for you.
@@ -191,12 +238,25 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
                 </div>
               </div>
             ) : (
-              messages.map((message) => <ChatMessage key={message.id} message={message} />)
+              data.messages.map((message) => <ChatMessage key={message.id} message={message} />)
             )}
             {status === "submitted" && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Loader2Icon className="size-3 animate-spin" />
                 Thinking…
+              </div>
+            )}
+            {showKeyNotice && (
+              <div className="rounded-md border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                The assistant needs a Vercel AI Gateway key —{" "}
+                <button
+                  type="button"
+                  className="underline"
+                  onClick={() => setShowApiKeyDialog(true)}
+                >
+                  add yours
+                </button>{" "}
+                or set <code className="font-mono">AI_GATEWAY_API_KEY</code> on the server.
               </div>
             )}
             <div ref={bottomRef} />
@@ -256,10 +316,11 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
 }
 
 // -----------------------------------------------------------------------------
-// Message rendering
+// Message rendering — eve's default reducer projects `data.messages` in the
+// AI SDK UIMessage convention: text parts plus `dynamic-tool` parts.
 // -----------------------------------------------------------------------------
 
-function ChatMessage({ message }: { message: ChatUIMessage }) {
+function ChatMessage({ message }: { message: EveMessage }) {
   if (message.role === "user") {
     const text = message.parts.map((part) => (part.type === "text" ? part.text : "")).join("");
     return (
@@ -273,14 +334,10 @@ function ChatMessage({ message }: { message: ChatUIMessage }) {
     <div className="flex max-w-full flex-col gap-2 self-start">
       {message.parts.map((part, index) => {
         const key = `${message.id}-${index}`;
-        if (part.type === "text") {
+        if (part.type === "text" && part.text.length > 0) {
           return <MarkdownPreview key={key} content={part.text} />;
         }
-        if (
-          part.type === "tool-createNote" ||
-          part.type === "tool-updateNote" ||
-          part.type === "tool-deleteNote"
-        ) {
+        if (part.type === "dynamic-tool") {
           return <ToolChip key={key} part={part} />;
         }
         return null;
@@ -289,41 +346,38 @@ function ChatMessage({ message }: { message: ChatUIMessage }) {
   );
 }
 
-type NotesToolPart = Extract<
-  ChatUIMessage["parts"][number],
-  { type: "tool-createNote" | "tool-updateNote" | "tool-deleteNote" }
->;
+type DynamicToolPart = Extract<EveMessagePart, { type: "dynamic-tool" }>;
 
-const TOOL_LABELS: Record<NotesToolPart["type"], string> = {
-  "tool-createNote": "Creating note",
-  "tool-updateNote": "Updating note",
-  "tool-deleteNote": "Deleting note",
+const TOOL_LABELS: Record<string, { active: string; done: string }> = {
+  create_note: { active: "Creating note", done: "Created note" },
+  update_note: { active: "Updating note", done: "Updated note" },
+  delete_note: { active: "Deleting note", done: "Deleted note" },
 };
 
-const TOOL_LABELS_DONE: Record<NotesToolPart["type"], string> = {
-  "tool-createNote": "Created note",
-  "tool-updateNote": "Updated note",
-  "tool-deleteNote": "Deleted note",
-};
+/** Loose view of tool inputs, for the chip detail line only. */
+const toolInputPreviewSchema = z.object({
+  title: z.string().optional(),
+  id: z.string().optional(),
+});
 
-function ToolChip({ part }: { part: NotesToolPart }) {
+function ToolChip({ part }: { part: DynamicToolPart }) {
   const notes = useNotesStore((state) => state.notes);
 
+  const labels = TOOL_LABELS[part.toolName];
+  if (!labels) return null;
+
   const done = part.state === "output-available";
-  const failed = part.state === "output-error";
-  const label = done
-    ? TOOL_LABELS_DONE[part.type]
-    : failed
-      ? "Tool call failed"
-      : TOOL_LABELS[part.type];
+  const failed = part.state === "output-error" || part.state === "output-denied";
+  const label = done ? labels.done : failed ? "Tool call failed" : labels.active;
 
   let detail = "";
   if (part.state === "input-available" || part.state === "output-available") {
-    if (part.type === "tool-createNote") {
-      detail = part.input.title;
-    } else {
-      const note = notes.find((n) => n.id === part.input.id);
-      detail = note?.title ?? "";
+    const input = toolInputPreviewSchema.safeParse(part.input);
+    if (input.success) {
+      detail =
+        part.toolName === "create_note"
+          ? (input.data.title ?? "")
+          : (notes.find((n) => n.id === input.data.id)?.title ?? "");
     }
   }
 
