@@ -1,3 +1,5 @@
+"use client";
+
 import { z } from "zod";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
@@ -11,6 +13,8 @@ export type NotePatch = Partial<Pick<Note, "title" | "content" | "tags">>;
 type NotesState = {
   notes: Note[];
   activeNoteId: string | null;
+  /** Whether the one-time seed has run — prevents seeds resurrecting after a full clear. */
+  seeded: boolean;
   /** Create a note locally (manual "new note" button). Returns the new note. */
   createNote: (partial?: NotePatch) => Note;
   /** Insert a fully-formed note (AI `createNote` tool — id comes from the server). */
@@ -19,21 +23,31 @@ type NotesState = {
   updateNote: (id: string, patch: NotePatch) => void;
   deleteNote: (id: string) => void;
   setActiveNote: (id: string | null) => void;
+  seed: () => void;
 };
 
-/** Zod boundary for what we read back from localStorage. */
+/**
+ * localStorage boundary: every persisted note is zod-parsed on read and any
+ * malformed entry is dropped, so corrupt/tampered storage can't crash
+ * downstream consumers.
+ */
 const persistedStateSchema = z.object({
-  notes: z.array(noteSchema),
-  activeNoteId: z.string().nullable(),
+  notes: z.array(z.unknown()).transform((notes) =>
+    notes.flatMap((note) => {
+      const parsed = noteSchema.safeParse(note);
+      return parsed.success ? [parsed.data] : [];
+    }),
+  ),
+  activeNoteId: z.string().nullable().optional(),
+  seeded: z.boolean().optional(),
 });
-
-const seedNotes = createSeedNotes();
 
 export const useNotesStore = create<NotesState>()(
   persist(
     (set) => ({
-      notes: seedNotes,
-      activeNoteId: seedNotes[0]?.id ?? null,
+      notes: [],
+      activeNoteId: null,
+      seeded: false,
 
       createNote: (partial) => {
         const now = new Date().toISOString();
@@ -75,6 +89,19 @@ export const useNotesStore = create<NotesState>()(
       },
 
       setActiveNote: (id) => set({ activeNoteId: id }),
+
+      seed: () =>
+        set((state) => {
+          const notes = [
+            ...state.notes,
+            ...createSeedNotes().filter((seed) => !state.notes.some((n) => n.id === seed.id)),
+          ];
+          return {
+            notes,
+            activeNoteId: state.activeNoteId ?? notes[0]?.id ?? null,
+            seeded: true,
+          };
+        }),
     }),
     {
       name: "ai-notes",
@@ -82,10 +109,21 @@ export const useNotesStore = create<NotesState>()(
       partialize: (state) => ({
         notes: state.notes,
         activeNoteId: state.activeNoteId,
+        seeded: state.seeded,
       }),
       merge: (persisted, current) => {
         const parsed = persistedStateSchema.safeParse(persisted);
-        return parsed.success ? { ...current, ...parsed.data } : current;
+        if (!parsed.success) return current;
+        return {
+          ...current,
+          notes: parsed.data.notes,
+          activeNoteId: parsed.data.activeNoteId ?? null,
+          seeded: parsed.data.seeded ?? false,
+        };
+      },
+      onRehydrateStorage: () => (state, error) => {
+        if (error || !state) return;
+        if (!state.seeded) state.seed();
       },
     },
   ),

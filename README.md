@@ -28,12 +28,12 @@ src/ai/
 ├── agents/notes-agent.ts          # ToolLoopAgent + createNote/updateNote/deleteNote tools
 ├── agents/notes-agent-prompt.ts   # system prompt
 ├── messages/data-parts.ts         # zod schemas + DataPart map — the client<->server contract
-├── messages/notes-context.ts      # app state shipped with each request (stateless server)
 └── response/stream-chat-response.ts
 src/app/api/chat/route.ts          # zod-parsed body, validateUIMessages, key resolution
 src/components/chat/               # chat panel (useChat + onData), api key dialog, demo transport
 src/components/notes/              # app shell, list, editor, markdown preview
-src/stores/notes-store.ts          # zustand + localStorage persist
+src/lib/notes-context.ts           # app state shipped with each request (stateless server)
+src/lib/notes-store.ts             # zustand + localStorage persist
 ```
 
 The streaming contract: each agent tool writes a `data-*` part (`data-create-note`, `data-update-note`, `data-delete-note`); the client's `onData` zod-parses the payload and applies it to the store, so AI edits appear in the editor in real time. The demo transport (`@loremllm/transport` `StaticChatTransport`) replays the same wire format with no network.

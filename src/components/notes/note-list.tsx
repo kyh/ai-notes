@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { useNotesStore } from "@/stores/notes-store";
+import { useNotesStore } from "@/lib/notes-store";
 
 /** Cheap markdown → plain text for list snippets. */
 const noteSnippet = (content: string) =>

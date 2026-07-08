@@ -41,3 +41,10 @@ export type DataPart = {
   "update-note": z.infer<typeof updateNoteDataSchema>;
   "delete-note": z.infer<typeof deleteNoteDataSchema>;
 };
+
+/** Schemas keyed by (unprefixed) data part name, for validateUIMessages. */
+export const dataPartSchemas: { [K in keyof DataPart]: z.ZodType<DataPart[K]> } = {
+  "create-note": createNoteDataSchema,
+  "update-note": updateNoteDataSchema,
+  "delete-note": deleteNoteDataSchema,
+};

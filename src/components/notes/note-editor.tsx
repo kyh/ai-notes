@@ -26,7 +26,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { useNotesStore } from "@/stores/notes-store";
+import { useNotesStore } from "@/lib/notes-store";
 
 export function NoteEditor() {
   const notes = useNotesStore((state) => state.notes);

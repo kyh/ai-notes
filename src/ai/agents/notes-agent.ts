@@ -1,18 +1,18 @@
 import { stepCountIs, tool, ToolLoopAgent } from "ai";
 
-import type { Note } from "@/lib/note-schema";
-import { createModel } from "../gateway";
+import { createModel } from "@/ai/gateway";
 import {
   createNoteInputSchema,
   deleteNoteInputSchema,
   updateNoteInputSchema,
-} from "../messages/data-parts";
-import type { NotesContext } from "../messages/notes-context";
-import type { NotesStreamWriter } from "../messages/types";
+} from "@/ai/messages/data-parts";
+import type { ChatStreamWriter } from "@/ai/messages/types";
+import type { Note } from "@/lib/note-schema";
+import type { NotesContext } from "@/lib/notes-context";
 import notesPrompt from "./notes-agent-prompt";
 
 type WriterParams = {
-  writer: NotesStreamWriter;
+  writer: ChatStreamWriter;
 };
 
 type WriterWithContextParams = WriterParams & {
@@ -124,7 +124,7 @@ const buildInstructions = (notesContext: NotesContext): string => {
     notesPrompt,
     `## Current state
 
-Current datetime: ${notesContext.currentDatetime}
+Current datetime: ${notesContext.now} (timezone: ${notesContext.timeZone})
 Active note id: ${notesContext.activeNoteId ?? "none"}
 
 The user's notes (${notesContext.notes.length}):

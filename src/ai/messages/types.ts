@@ -6,29 +6,18 @@ import type {
   DataPart,
   deleteNoteInputSchema,
   updateNoteInputSchema,
-} from "./data-parts";
-import type { Metadata } from "./metadata";
+} from "@/ai/messages/data-parts";
 
 /**
- * Typed tool set so the transcript UI can narrow `tool-*` message parts
- * (e.g. render "Created note" chips with typed `input`).
+ * UI tool typings for the agent's tool set — lets the chat transcript
+ * narrow `tool-*` message parts without casts.
  */
-export type NotesTools = {
-  createNote: {
-    input: z.infer<typeof createNoteInputSchema>;
-    output: string;
-  };
-  updateNote: {
-    input: z.infer<typeof updateNoteInputSchema>;
-    output: string;
-  };
-  deleteNote: {
-    input: z.infer<typeof deleteNoteInputSchema>;
-    output: string;
-  };
+export type ChatTools = {
+  createNote: { input: z.infer<typeof createNoteInputSchema>; output: string };
+  updateNote: { input: z.infer<typeof updateNoteInputSchema>; output: string };
+  deleteNote: { input: z.infer<typeof deleteNoteInputSchema>; output: string };
 };
 
-export type NotesChatUIMessage = UIMessage<Metadata, DataPart, NotesTools>;
+export type ChatUIMessage = UIMessage<unknown, DataPart, ChatTools>;
 
-/** Typed writer for streaming data parts to the UI. */
-export type NotesStreamWriter = UIMessageStreamWriter<NotesChatUIMessage>;
+export type ChatStreamWriter = UIMessageStreamWriter<ChatUIMessage>;

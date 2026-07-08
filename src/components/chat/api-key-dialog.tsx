@@ -24,14 +24,14 @@ interface ApiKeyDialogProps {
 
 export function ApiKeyDialog({ open, onOpenChange }: ApiKeyDialogProps) {
   const [apiKey, setApiKey, removeApiKey] = useLocalStorage(GATEWAY_API_KEY_STORAGE_KEY, "");
-  const [apiKeyInput, setApiKeyInput] = React.useState("");
+  const [apiKeyInput, setApiKeyInput] = React.useState(apiKey);
 
-  // Sync input with stored value when dialog opens
-  React.useEffect(() => {
-    if (open) {
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
       setApiKeyInput(apiKey);
     }
-  }, [open, apiKey]);
+    onOpenChange(nextOpen);
+  };
 
   const handleSaveApiKey = () => {
     if (apiKeyInput.trim()) {
@@ -44,7 +44,7 @@ export function ApiKeyDialog({ open, onOpenChange }: ApiKeyDialogProps) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Enter Vercel Gateway API Key</DialogTitle>
@@ -75,16 +75,10 @@ export function ApiKeyDialog({ open, onOpenChange }: ApiKeyDialogProps) {
             autoFocus
           />
           <div className="text-sm text-muted-foreground">
-            <button
-              type="button"
-              className="underline"
-              onClick={() => {
-                setApiKeyInput("demo");
-              }}
-            >
+            <button type="button" className="underline" onClick={() => setApiKeyInput("demo")}>
               Use a demo key
             </button>
-            &nbsp;(responses will always be the same)
+            &nbsp;(Uses a scripted client-side reply — no API key or network needed.)
           </div>
         </div>
         <DialogFooter>

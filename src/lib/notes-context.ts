@@ -8,8 +8,10 @@ import { z } from "zod";
  * represented by a ~200 char snippet.
  */
 export const notesContextSchema = z.object({
-  /** ISO 8601 datetime on the client at send time */
-  currentDatetime: z.string(),
+  /** Current datetime, ISO 8601 with UTC instant. */
+  now: z.string(),
+  /** IANA timezone, e.g. "America/Los_Angeles". */
+  timeZone: z.string(),
   activeNoteId: z.string().nullable(),
   notes: z.array(
     z.object({

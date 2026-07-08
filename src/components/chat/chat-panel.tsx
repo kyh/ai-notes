@@ -10,16 +10,16 @@ import {
   deleteNoteDataSchema,
   updateNoteDataSchema,
 } from "@/ai/messages/data-parts";
-import type { NotesContext } from "@/ai/messages/notes-context";
-import type { NotesChatUIMessage } from "@/ai/messages/types";
+import type { ChatUIMessage } from "@/ai/messages/types";
 import { MarkdownPreview } from "@/components/notes/markdown-preview";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { useLocalStorage } from "@/hooks/use-local-storage";
+import type { NotesContext } from "@/lib/notes-context";
+import { useNotesStore, type NotePatch } from "@/lib/notes-store";
 import { cn } from "@/lib/utils";
-import { useNotesStore, type NotePatch } from "@/stores/notes-store";
 import { ApiKeyDialog, GATEWAY_API_KEY_STORAGE_KEY } from "./api-key-dialog";
 import { demoTransport } from "./demo-transport";
 
@@ -34,7 +34,8 @@ const EXAMPLE_PROMPTS = [
 const buildNotesContext = (): NotesContext => {
   const { notes, activeNoteId } = useNotesStore.getState();
   return {
-    currentDatetime: new Date().toISOString(),
+    now: new Date().toISOString(),
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     activeNoteId,
     notes: notes.map((note) => ({
       id: note.id,
@@ -58,18 +59,18 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
   const [apiKey, , removeApiKey] = useLocalStorage(GATEWAY_API_KEY_STORAGE_KEY, "");
   const bottomRef = React.useRef<HTMLDivElement>(null);
 
-  const { messages, sendMessage, status } = useChat<NotesChatUIMessage>({
+  const { messages, sendMessage, status } = useChat<ChatUIMessage>({
     id: apiKey === "" ? "keyless" : apiKey,
     transport: apiKey === "demo" ? demoTransport : undefined,
     onError: (error) => {
-      const errorMessage = error.message.toLowerCase();
+      const message = error.message.toLowerCase();
       const isAuthError =
-        errorMessage.includes("unauthorized") ||
-        errorMessage.includes("authentication") ||
-        errorMessage.includes("invalid api key") ||
-        errorMessage.includes("401") ||
-        errorMessage.includes("403");
-
+        message.includes("unauthorized") ||
+        message.includes("authentication") ||
+        message.includes("invalid api key") ||
+        message.includes("gateway api key is required") ||
+        message.includes("401") ||
+        message.includes("403");
       if (isAuthError) {
         removeApiKey();
         toast.error("Invalid API key. Please enter a valid Vercel Gateway API key.");
@@ -124,10 +125,12 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, status]);
 
+  const needsKey = !apiKey && process.env.NODE_ENV !== "development";
+
   const send = (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || isLoading) return;
-    if (!apiKey && process.env.NODE_ENV !== "development") {
+    if (needsKey) {
       setShowApiKeyDialog(true);
       return;
     }
@@ -144,9 +147,7 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
   };
 
   const handleTextareaFocus = () => {
-    if (!apiKey && process.env.NODE_ENV !== "development") {
-      setShowApiKeyDialog(true);
-    }
+    if (needsKey) setShowApiKeyDialog(true);
   };
 
   return (
@@ -258,7 +259,7 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
 // Message rendering
 // -----------------------------------------------------------------------------
 
-function ChatMessage({ message }: { message: NotesChatUIMessage }) {
+function ChatMessage({ message }: { message: ChatUIMessage }) {
   if (message.role === "user") {
     const text = message.parts.map((part) => (part.type === "text" ? part.text : "")).join("");
     return (
@@ -289,7 +290,7 @@ function ChatMessage({ message }: { message: NotesChatUIMessage }) {
 }
 
 type NotesToolPart = Extract<
-  NotesChatUIMessage["parts"][number],
+  ChatUIMessage["parts"][number],
   { type: "tool-createNote" | "tool-updateNote" | "tool-deleteNote" }
 >;
 

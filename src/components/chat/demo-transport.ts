@@ -1,6 +1,6 @@
 import { StaticChatTransport } from "@loremllm/transport";
 
-import type { NotesChatUIMessage } from "@/ai/messages/types";
+import type { ChatUIMessage } from "@/ai/messages/types";
 import { WEEK_PLAN_NOTE_ID } from "@/lib/seed-notes";
 
 const CHECKLIST_CONTENT = `## Monday
@@ -36,7 +36,7 @@ const toolInput = {
  * Keyless demo mode: replays a scripted "Turn my week plan into a checklist"
  * exchange (one updateNote tool call) — no network, no API key.
  */
-export const demoTransport = new StaticChatTransport<NotesChatUIMessage>({
+export const demoTransport = new StaticChatTransport<ChatUIMessage>({
   chunkDelayMs: [50, 200],
   async *mockResponse() {
     yield { type: "step-start" };

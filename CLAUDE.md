@@ -13,16 +13,16 @@ AI-native notes app. Next.js 16 (App Router, Turbopack), React 19, TypeScript, T
 ## Architecture
 
 ```
-src/ai/gateway.ts                     # MODEL_ID + createModel(apiKey) — single provider factory
+src/ai/gateway.ts                     # createModel(apiKey) — single provider factory
 src/ai/agents/notes-agent.ts          # ToolLoopAgent: createNote/updateNote/deleteNote tools
 src/ai/agents/notes-agent-prompt.ts   # system prompt
 src/ai/messages/data-parts.ts         # zod schemas + DataPart map — client<->server contract
-src/ai/messages/notes-context.ts      # per-request app state (notes index + active note)
+src/lib/notes-context.ts              # per-request app state (notes index + active note)
 src/ai/response/stream-chat-response.ts
 src/app/api/chat/route.ts             # zod body parse + validateUIMessages + key resolution
 src/components/chat/                  # chat-panel (useChat + onData), api-key-dialog, demo-transport
 src/components/notes/                 # notes-app, note-list, note-editor, markdown-preview
-src/stores/notes-store.ts             # zustand store, seeds from src/lib/seed-notes.ts
+src/lib/notes-store.ts                # zustand store, seeds from src/lib/seed-notes.ts
 ```
 
 Flow: client ships `notesContext` (index snippets + full active note + datetime) in every request body → server appends it to instructions → agent tools `writer.write` `data-*` parts → client `onData` zod-parses each payload → store mutation + sonner toast.

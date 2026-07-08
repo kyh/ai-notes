@@ -4,7 +4,7 @@ import * as React from "react";
 import { NotebookPenIcon, SparklesIcon } from "lucide-react";
 
 import { ChatPanel } from "@/components/chat/chat-panel";
-import { ModeToggle } from "@/components/mode-toggle";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { NoteEditor } from "@/components/notes/note-editor";
 import { NoteList } from "@/components/notes/note-list";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,7 @@ export function NotesApp() {
           <h1 className="text-sm font-semibold tracking-tight">AI Notes</h1>
         </div>
         <div className="flex items-center gap-1">
-          <ModeToggle />
+          <ThemeToggle />
           <Button
             variant={chatOpen ? "secondary" : "ghost"}
             size="sm"
