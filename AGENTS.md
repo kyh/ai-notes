@@ -65,24 +65,35 @@ pnpm verify     # typecheck · lint · format
 rewrites. Use `pnpm format:fix` / `pnpm lint:fix` to apply. There is no test suite.
 
 Runtime — drive the real UI with [agent-browser](https://github.com/vercel-labs/agent-browser).
-This exact sequence is verified against the seeded app:
+This exact sequence was run end-to-end against the seeded app, twice, and leaves no state
+behind — it is re-runnable as written:
 
 ```sh
 agent-browser open http://localhost:3000
-agent-browser wait 'input[aria-label="Note title"]'        # ← hydration gate, see below
+agent-browser wait  'button[aria-label="New note"]'        # ← hydration gate, see below
 agent-browser click 'button[aria-label="New note"]'
 agent-browser fill  'input[aria-label="Note title"]'      "Ported from init"
 agent-browser fill  'textarea[aria-label="Note content"]' "Verified headlessly."
 agent-browser snapshot -i -c                               # assert the note is in the list
-agent-browser click 'button[aria-label="Delete note"]'     # clean up
+agent-browser click 'button[aria-label="Delete note"]'     # only OPENS the confirm dialog
+agent-browser find role button click --name Delete --exact # …this is what deletes
 ```
+
+**Delete takes two clicks.** `button[aria-label="Delete note"]` just sets `confirmDelete` in
+`note-editor.tsx`; the destructive `Delete` inside the `<Dialog>` is what calls
+`deleteNote()`. Stop after the first click and you leave a modal open over the page — every
+later `snapshot`/`click` in that session then hits a dialog-blocked UI. `--exact` matters:
+without it the accessible-name match also hits `Delete note`.
 
 **The hydration gate matters.** `src/components/notes/notes-app.tsx` holds the three panes
 behind a `mounted` flag set in `useEffect`, because notes rehydrate from `localStorage` on the
-client. Server HTML is _only_ `<Skeleton>` elements — snapshot before hydration and you see
-nothing but placeholders. Wait for a post-mount element (the note-title input, not the `<h1>`,
-which renders in both passes). The `mounted` gate is load-bearing; removing it is a real
-hydration mismatch.
+client. Server HTML is _only_ `<Skeleton>` elements (15 of them; zero `New note`, zero
+`Note title`) — snapshot before hydration and you see nothing but placeholders. Gate on
+`button[aria-label="New note"]`: it renders for _every_ post-mount state, so the recipe stays
+re-runnable. Don't gate on the note-title input — `deleteNote` nulls `activeNoteId`, so after
+a successful cleanup the editor shows the "No note selected" empty state and that wait would
+hang with no diagnostic. And not the `<h1>`, which renders in both passes. The `mounted` gate
+is load-bearing; removing it is a real hydration mismatch.
 
 Two selector gotchas learned the hard way: `agent-browser find role button click "New note"`
 matches the Base UI `TooltipTrigger` wrapper and silently does nothing — use the CSS selector

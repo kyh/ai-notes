@@ -3,8 +3,12 @@
   "prompt": "This template is built to be driven by coding agents — read AGENTS.md first. There is no database and no login: `pnpm install && pnpm dev` is the whole setup. AI_GATEWAY_API_KEY in .env.local is only needed for assistant turns; the notes UI is fully verifiable without it. Gate every change with `pnpm verify`. NEVER run `eve build` while `pnpm dev` is running — it corrupts eve's dev cache (recovery: `rm -rf .eve .workflow-data`).",
   "permissions": {
     "allow": [
+      "Bash(pnpm install:*)",
       "Bash(pnpm verify:*)",
       "Bash(pnpm typecheck:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm format:*)",
+      "Bash(pnpm build:*)",
       "Bash(pnpm dev:*)",
       "Bash(agent-browser:*)"
     ]
