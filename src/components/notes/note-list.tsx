@@ -39,14 +39,14 @@ export function NoteList() {
   const [tagFilter, setTagFilter] = React.useState<string | null>(null);
 
   const allTags = React.useMemo(
-    () => [...new Set(notes.flatMap((note) => note.tags))].sort(),
+    () => [...new Set(notes.flatMap((note) => note.tags))].toSorted(),
     [notes],
   );
 
   const visibleNotes = React.useMemo(() => {
     const q = query.trim().toLowerCase();
-    return [...notes]
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    return notes
+      .toSorted((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
       .filter((note) => tagFilter === null || note.tags.includes(tagFilter))
       .filter(
         (note) =>
@@ -92,7 +92,13 @@ export function NoteList() {
               key={tag}
               variant={tagFilter === tag ? "default" : "outline"}
               className="cursor-pointer select-none"
-              render={<button type="button" />}
+              render={
+                <button
+                  type="button"
+                  aria-pressed={tagFilter === tag}
+                  aria-label={`Filter by ${tag}`}
+                />
+              }
               onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
             >
               {tag}
