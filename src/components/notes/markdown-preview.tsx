@@ -1,3 +1,5 @@
+/* oxlint-disable react/no-array-index-key -- the whole document is re-parsed on
+   every render, so tokens have no identity outside their position. */
 import * as React from "react";
 
 import { cn } from "@/lib/utils";

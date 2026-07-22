@@ -1,5 +1,11 @@
 # Agent Instructions
 
+> **Agent-driven development:** read [`AGENTS.md`](./AGENTS.md) first. It's the tool-agnostic
+> runbook — headless quickstart, what works without an API key, the seeded notes, and a
+> verified agent-browser recipe for driving the real UI (including the hydration gate that
+> makes an early snapshot return nothing but skeletons). This file is the Claude-specific
+> conventions layer; keep the two in sync.
+
 AI-native notes app. Next.js 16 (App Router, Turbopack), React 19, TypeScript, Tailwind CSS v4, eve (Vercel's agent framework) + `ai@7`.
 
 ## Tech Stack
@@ -34,9 +40,13 @@ Flow: chat panel `send({ message, clientContext: notesSnapshot })` → eve chann
 ```bash
 pnpm dev          # dev server — boots Next.js AND the eve agent runtime
 pnpm build        # production build (Next). Vercel builds the eve service via withEve
-pnpm lint         # oxlint
-pnpm format:fix   # oxfmt
+pnpm verify       # typecheck · lint · format — the gate; run before every commit
+pnpm lint:fix     # oxlint --fix
+pnpm format:fix   # oxfmt --write
 ```
+
+`lint` and `format` are check-only (`--deny-warnings`, `--check`) so `verify` fails instead
+of rewriting the tree. There is no test suite and no CI workflow — `pnpm verify` is the gate.
 
 **NEVER run `eve build` while `pnpm dev` is running** — it corrupts the eve dev workflow cache. If dev breaks mysteriously: delete `.eve/` + `.workflow-data/` and restart.
 

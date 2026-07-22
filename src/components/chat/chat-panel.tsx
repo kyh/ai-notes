@@ -43,7 +43,8 @@ const buildNotesContext = (): NotesContext => {
       tags: note.tags,
       updatedAt: note.updatedAt,
       snippet: note.content.slice(0, 200),
-      ...(note.id === activeNoteId ? { content: note.content } : {}),
+      // Full body only for the active note; `undefined` is dropped by JSON.
+      content: note.id === activeNoteId ? note.content : undefined,
     })),
   };
 };
