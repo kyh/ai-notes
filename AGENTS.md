@@ -58,11 +58,11 @@ Static gate — **run before every commit** (there is no CI workflow in this rep
 gate):
 
 ```sh
-pnpm verify     # typecheck · lint · format
+pnpm verify     # typecheck · lint · format · test
 ```
 
 `format` is `oxfmt --check` and `lint` is `--deny-warnings`, so `verify` fails rather than
-rewrites. Use `pnpm format:fix` / `pnpm lint:fix` to apply. There is no test suite.
+rewrites. Use `pnpm format:fix` / `pnpm lint:fix` to apply. A vitest harness runs in `pnpm verify`; no tests are written yet.
 
 Runtime — drive the real UI with [agent-browser](https://github.com/vercel-labs/agent-browser).
 This exact sequence was run end-to-end against the seeded app, twice, and leaves no state
