@@ -190,7 +190,7 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
       setShowApiKeyDialog(true);
       return;
     }
-    agent.send({ message: trimmed, clientContext: buildNotesContext() }).catch(() => undefined); // failures surface via status/error/onError
+    agent.send(trimmed, { clientContext: buildNotesContext() }).catch(() => undefined); // failures surface via status/error/onError
     setInput("");
   };
 
