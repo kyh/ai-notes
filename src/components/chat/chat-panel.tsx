@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import type { MessageStreamEvent } from "eve/client";
 import type { EveMessage, EveMessagePart } from "eve/react";
 import { useEveAgent } from "eve/react";
 import { ArrowUpIcon, CheckIcon, KeyIcon, Loader2Icon, SparklesIcon, XIcon } from "lucide-react";
@@ -66,41 +67,25 @@ const resolveAuthHeaders = (): Readonly<Record<string, string>> => {
 //
 // eve streams every tool result as an `action.result` event whose
 // `data.result` is `{ kind: "tool-result", toolName, output, isError? }`,
-// where `output` is the tool's full `execute` return value. Each payload is
-// zod-parsed against the shared schemas before touching the store.
+// where `output` is the tool's full `execute` return value. Events arrive
+// already typed (eve parses its own transport); each JSON `output` payload
+// is zod-parsed against the shared schemas before touching the store.
 // -----------------------------------------------------------------------------
 
-const toolResultEventSchema = z.object({
-  type: z.literal("action.result"),
-  data: z.object({
-    status: z.enum(["completed", "failed", "rejected"]),
-    result: z.object({
-      kind: z.literal("tool-result"),
-      toolName: z.string(),
-      output: z.unknown(),
-      isError: z.boolean().optional(),
-    }),
-  }),
-});
+// A child session's events arrive unstamped (no `meta`) inside
+// `subagent.event`; eve only exports the stamped union, so derive it.
+type AgentStreamEvent = Extract<MessageStreamEvent, { type: "subagent.event" }>["data"]["event"];
 
-/** `subagent.event` wraps a child session's stream event under `data.event`. */
-const subagentEventSchema = z.object({
-  type: z.literal("subagent.event"),
-  data: z.object({ event: z.unknown() }),
-});
-
-const applyToolResult = (event: unknown): void => {
+const applyToolResult = (event: AgentStreamEvent): void => {
   // Delegation is forbidden by the instructions, but if the model strays,
   // unwrap the child's events so its tool results still reach the store.
-  const wrapped = subagentEventSchema.safeParse(event);
-  if (wrapped.success) {
-    applyToolResult(wrapped.data.data.event);
+  if (event.type === "subagent.event") {
+    applyToolResult(event.data.event);
     return;
   }
-  const parsed = toolResultEventSchema.safeParse(event);
-  if (!parsed.success) return;
-  const { status, result } = parsed.data.data;
-  if (status !== "completed" || result.isError === true) return;
+  if (event.type !== "action.result") return;
+  const { status, result } = event.data;
+  if (status !== "completed" || result.kind !== "tool-result" || result.isError === true) return;
 
   const store = useNotesStore.getState();
   switch (result.toolName) {
@@ -349,11 +334,14 @@ function ChatMessage({ message }: { message: EveMessage }) {
 
 type DynamicToolPart = Extract<EveMessagePart, { type: "dynamic-tool" }>;
 
-const TOOL_LABELS: Record<string, { active: string; done: string }> = {
+const TOOL_LABELS = {
   create_note: { active: "Creating note", done: "Created note" },
   update_note: { active: "Updating note", done: "Updated note" },
   delete_note: { active: "Deleting note", done: "Deleted note" },
-};
+} satisfies Record<string, { active: string; done: string }>;
+
+const isLabeledTool = (toolName: string): toolName is keyof typeof TOOL_LABELS =>
+  toolName in TOOL_LABELS;
 
 /** Loose view of tool inputs, for the chip detail line only. */
 const toolInputPreviewSchema = z.object({
@@ -364,8 +352,8 @@ const toolInputPreviewSchema = z.object({
 function ToolChip({ part }: { part: DynamicToolPart }) {
   const notes = useNotesStore((state) => state.notes);
 
+  if (!isLabeledTool(part.toolName)) return null;
   const labels = TOOL_LABELS[part.toolName];
-  if (!labels) return null;
 
   const done = part.state === "output-available";
   const failed = part.state === "output-error" || part.state === "output-denied";
