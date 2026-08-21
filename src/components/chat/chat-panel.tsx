@@ -143,6 +143,7 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
   const [showApiKeyDialog, setShowApiKeyDialog] = React.useState(false);
   const [apiKey, , removeApiKey] = useLocalStorage(GATEWAY_API_KEY_STORAGE_KEY, "");
   const bottomRef = React.useRef<HTMLDivElement>(null);
+  const transcriptRef = React.useRef<HTMLDivElement>(null);
 
   const agent = useEveAgent({
     headers: resolveAuthHeaders,
@@ -162,9 +163,17 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
   const isLoading = status === "submitted" || status === "streaming";
   const showKeyNotice = status === "error" && error !== undefined && isAuthError(error);
 
+  // Follow the transcript as it grows. Watching the rendered height catches
+  // streamed tokens too, which appending-message deps would miss.
   React.useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [data.messages, status]);
+    const transcript = transcriptRef.current;
+    if (!transcript) return;
+    const observer = new ResizeObserver(() => {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    });
+    observer.observe(transcript);
+    return () => observer.disconnect();
+  }, []);
 
   const needsKey = !apiKey && process.env.NODE_ENV !== "development";
 
@@ -202,7 +211,7 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
         </div>
 
         <ScrollArea className="min-h-0 flex-1">
-          <div className="flex flex-col gap-4 p-4">
+          <div ref={transcriptRef} className="flex flex-col gap-4 p-4">
             {data.messages.length === 0 ? (
               <div className="flex flex-col gap-3 pt-6">
                 <p className="text-sm text-muted-foreground">

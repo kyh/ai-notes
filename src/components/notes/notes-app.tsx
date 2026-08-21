@@ -10,12 +10,17 @@ import { NoteList } from "@/components/notes/note-list";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
+const subscribeToNothing = () => () => undefined;
+
 export function NotesApp() {
   const [chatOpen, setChatOpen] = React.useState(true);
   // Notes hydrate from localStorage on the client; gate the panes behind a
   // mount check so server and first client render agree.
-  const [mounted, setMounted] = React.useState(false);
-  React.useEffect(() => setMounted(true), []);
+  const mounted = React.useSyncExternalStore(
+    subscribeToNothing,
+    () => true,
+    () => false,
+  );
 
   return (
     <div className="flex h-dvh flex-col">
