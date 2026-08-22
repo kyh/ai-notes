@@ -40,13 +40,16 @@ Flow: chat panel `send({ message, clientContext: notesSnapshot })` → eve chann
 ```bash
 pnpm dev          # dev server — boots Next.js AND the eve agent runtime
 pnpm build        # production build (Next). Vercel builds the eve service via withEve
-pnpm verify       # typecheck · lint · format · test — the gate; run before every commit
+pnpm verify       # typecheck · lint · format — the gate; run before every commit
 pnpm lint:fix     # oxlint --fix
 pnpm format:fix   # oxfmt --write
 ```
 
 `lint` and `format` are check-only (`--deny-warnings`, `--check`) so `verify` fails instead
-of rewriting the tree. A vitest harness runs in `pnpm verify` but no tests are written yet; there is no CI workflow — `pnpm verify` is the gate.
+of rewriting the tree. `pnpm test` runs Node's built-in runner via tsx, but no tests are
+written yet, so it is deliberately not part of `pnpm verify` (a node:test run that matches no
+files exits non-zero); add `&& pnpm test` back with the first test file. There is no CI
+workflow — `pnpm verify` is the gate.
 
 **NEVER run `eve build` while `pnpm dev` is running** — it corrupts the eve dev workflow cache. If dev breaks mysteriously: delete `.eve/` + `.workflow-data/` and restart.
 

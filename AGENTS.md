@@ -58,11 +58,14 @@ Static gate — **run before every commit** (there is no CI workflow in this rep
 gate):
 
 ```sh
-pnpm verify     # typecheck · lint · format · test
+pnpm verify     # typecheck · lint · format
 ```
 
 `format` is `oxfmt --check` and `lint` is `--deny-warnings`, so `verify` fails rather than
-rewrites. Use `pnpm format:fix` / `pnpm lint:fix` to apply. A vitest harness runs in `pnpm verify`; no tests are written yet.
+rewrites. Use `pnpm format:fix` / `pnpm lint:fix` to apply. `pnpm test` is wired to Node's
+built-in runner (`node --import tsx --test 'src/**/*.test.ts'`) but no tests are written yet,
+so it exits non-zero and is deliberately left out of `verify` — add `&& pnpm test` back with
+the first test file.
 
 Runtime — drive the real UI with [agent-browser](https://github.com/vercel-labs/agent-browser).
 This exact sequence was run end-to-end against the seeded app, twice, and leaves no state
