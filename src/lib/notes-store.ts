@@ -10,7 +10,7 @@ import { createSeedNotes } from "@/lib/seed-notes";
 /** Fields the UI and the AI are allowed to change on an existing note. */
 export type NotePatch = Partial<Pick<Note, "title" | "content" | "tags">>;
 
-type NotesState = {
+export type NotesState = {
   notes: Note[];
   activeNoteId: string | null;
   /** Whether the one-time seed has run — prevents seeds resurrecting after a full clear. */
