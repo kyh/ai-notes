@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import type { MessageStreamEvent } from "eve/client";
 import type { EveMessage, EveMessagePart } from "eve/react";
 import { useEveAgent } from "eve/react";
 import { ArrowUpIcon, CheckIcon, KeyIcon, Loader2Icon, SparklesIcon, XIcon } from "lucide-react";
@@ -14,13 +13,10 @@ import { Kbd } from "@/components/ui/kbd";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { useLocalStorage } from "@/hooks/use-local-storage";
-import {
-  createNotePayloadSchema,
-  deleteNotePayloadSchema,
-  updateNotePayloadSchema,
-} from "@/lib/assistant-schemas";
+import { isAtBottom } from "@/lib/autoscroll";
+import { applyStreamEvent, type AgentStreamEvent } from "@/lib/chat-bridge";
 import type { NotesContext } from "@/lib/notes-context";
-import { useNotesStore, type NotePatch } from "@/lib/notes-store";
+import { useNotesStore } from "@/lib/notes-store";
 import { cn } from "@/lib/utils";
 import { ApiKeyDialog, GATEWAY_API_KEY_STORAGE_KEY } from "./api-key-dialog";
 
@@ -62,67 +58,13 @@ const resolveAuthHeaders = (): Readonly<Record<string, string>> => {
   return key !== null && key.length > 0 ? { authorization: `Bearer ${key}` } : {};
 };
 
-// -----------------------------------------------------------------------------
-// Tool results -> store mutations
-//
-// eve streams every tool result as an `action.result` event whose
-// `data.result` is `{ kind: "tool-result", toolName, output, isError? }`,
-// where `output` is the tool's full `execute` return value. Events arrive
-// already typed (eve parses its own transport); each JSON `output` payload
-// is zod-parsed against the shared schemas before touching the store.
-// -----------------------------------------------------------------------------
-
-// A child session's events arrive unstamped (no `meta`) inside
-// `subagent.event`; eve only exports the stamped union, so derive it.
-type AgentStreamEvent = Extract<MessageStreamEvent, { type: "subagent.event" }>["data"]["event"];
-
 const applyToolResult = (event: AgentStreamEvent): void => {
-  // Delegation is forbidden by the instructions, but if the model strays,
-  // unwrap the child's events so its tool results still reach the store.
-  if (event.type === "subagent.event") {
-    applyToolResult(event.data.event);
-    return;
-  }
-  if (event.type !== "action.result") return;
-  const { status, result } = event.data;
-  if (status !== "completed" || result.kind !== "tool-result" || result.isError === true) return;
-
-  const store = useNotesStore.getState();
-  switch (result.toolName) {
-    case "create_note": {
-      const payload = createNotePayloadSchema.safeParse(result.output);
-      if (!payload.success) return;
-      store.insertNote(payload.data.note);
-      toast.success(`Created "${payload.data.note.title}"`);
-      break;
-    }
-    case "update_note": {
-      const payload = updateNotePayloadSchema.safeParse(result.output);
-      if (!payload.success) return;
-      const { id, title, content, tags } = payload.data;
-      const note = store.notes.find((n) => n.id === id);
-      if (!note) {
-        toast.error("The assistant tried to update a note that no longer exists");
-        return;
-      }
-      const patch: NotePatch = {};
-      if (title !== undefined) patch.title = title;
-      if (content !== undefined) patch.content = content;
-      if (tags !== undefined) patch.tags = tags;
-      store.updateNote(id, patch);
-      toast.success(`Updated "${patch.title ?? note.title}"`);
-      break;
-    }
-    case "delete_note": {
-      const payload = deleteNotePayloadSchema.safeParse(result.output);
-      if (!payload.success) return;
-      const note = store.notes.find((n) => n.id === payload.data.id);
-      if (!note) return;
-      store.deleteNote(note.id);
-      toast.success(`Deleted "${note.title}"`);
-      break;
-    }
-  }
+  // Read the store per event: a create and its follow-up update arrive as two
+  // events, and the second has to see the first one's note.
+  const notification = applyStreamEvent(event, useNotesStore.getState());
+  if (notification === null) return;
+  if (notification.tone === "error") toast.error(notification.message);
+  else toast.success(notification.message);
 };
 
 /**
@@ -142,8 +84,9 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
   const [input, setInput] = React.useState("");
   const [showApiKeyDialog, setShowApiKeyDialog] = React.useState(false);
   const [apiKey, , removeApiKey] = useLocalStorage(GATEWAY_API_KEY_STORAGE_KEY, "");
-  const bottomRef = React.useRef<HTMLDivElement>(null);
+  const viewportRef = React.useRef<HTMLDivElement>(null);
   const transcriptRef = React.useRef<HTMLDivElement>(null);
+  const pinnedToBottomRef = React.useRef(true);
 
   const agent = useEveAgent({
     headers: resolveAuthHeaders,
@@ -166,13 +109,26 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
   // Follow the transcript as it grows. Watching the rendered height catches
   // streamed tokens too, which appending-message deps would miss.
   React.useEffect(() => {
+    const viewport = viewportRef.current;
     const transcript = transcriptRef.current;
-    if (!transcript) return;
+    if (!viewport || !transcript) return;
+
+    // Only user scrolls decide whether to keep following; the jump below is
+    // instant so the scroll it fires re-reads a bottomed-out viewport rather
+    // than a smooth-scroll frame somewhere in between.
+    const handleScroll = () => {
+      pinnedToBottomRef.current = isAtBottom(viewport);
+    };
     const observer = new ResizeObserver(() => {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      if (pinnedToBottomRef.current) viewport.scrollTop = viewport.scrollHeight;
     });
+
+    viewport.addEventListener("scroll", handleScroll, { passive: true });
     observer.observe(transcript);
-    return () => observer.disconnect();
+    return () => {
+      viewport.removeEventListener("scroll", handleScroll);
+      observer.disconnect();
+    };
   }, []);
 
   const needsKey = !apiKey && process.env.NODE_ENV !== "development";
@@ -210,7 +166,7 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
           </Button>
         </div>
 
-        <ScrollArea className="min-h-0 flex-1">
+        <ScrollArea className="min-h-0 flex-1" viewportRef={viewportRef}>
           <div ref={transcriptRef} className="flex flex-col gap-4 p-4">
             {data.messages.length === 0 ? (
               <div className="flex flex-col gap-3 pt-6">
@@ -254,7 +210,6 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
                 or set <code className="font-mono">AI_GATEWAY_API_KEY</code> on the server.
               </div>
             )}
-            <div ref={bottomRef} />
           </div>
         </ScrollArea>
 
