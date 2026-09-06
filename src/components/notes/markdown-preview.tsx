@@ -2,7 +2,7 @@
    every render, so tokens have no identity outside their position. */
 import * as React from "react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 /**
  * Tiny hand-rolled markdown renderer for a safe subset:
