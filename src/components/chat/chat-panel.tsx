@@ -17,7 +17,7 @@ import { isAtBottom } from "@/lib/autoscroll";
 import { applyStreamEvent, type AgentStreamEvent } from "@/lib/chat-bridge";
 import type { NotesContext } from "@/lib/notes-context";
 import { useNotesStore } from "@/lib/notes-store";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 import { ApiKeyDialog, GATEWAY_API_KEY_STORAGE_KEY } from "./api-key-dialog";
 
 const EXAMPLE_PROMPTS = [
