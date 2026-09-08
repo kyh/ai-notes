@@ -11,8 +11,6 @@ const hoursAgo = (hours: number) => new Date(Date.now() - hours * 60 * 60 * 1000
  */
 export const createSeedNotes = (): Note[] => [
   {
-    id: WEEK_PLAN_NOTE_ID,
-    title: "Week plan",
     content: `## Monday
 - Ship the notes list refactor
 - 1:1 with Sam at 2pm
@@ -36,13 +34,13 @@ export const createSeedNotes = (): Note[] => [
 - Bug triage + cleanup day
 - Publish the blog post if it's ready
 - Plan next week before logging off`,
-    tags: ["planning"],
     createdAt: hoursAgo(160),
+    id: WEEK_PLAN_NOTE_ID,
+    tags: ["planning"],
+    title: "Week plan",
     updatedAt: hoursAgo(0.5),
   },
   {
-    id: "blog-draft",
-    title: "Draft: Why I'm learning to write again",
     content: `I used to write constantly. A blog nobody read, long emails, notebooks full of half-formed arguments with myself. Then work happened, and somewhere along the way I convinced myself that shipping code was the only writing that counted.
 
 I was wrong, and it took a decade to notice.
@@ -58,13 +56,13 @@ So I'm starting again, with rules this time:
 The goal isn't an audience. The goal is a habit of thinking in public, where lazy reasoning has nowhere to hide.
 
 (TODO: ending feels abrupt — maybe close with the notebook story?)`,
-    tags: ["writing", "draft"],
     createdAt: hoursAgo(72),
+    id: "blog-draft",
+    tags: ["writing", "draft"],
+    title: "Draft: Why I'm learning to write again",
     updatedAt: hoursAgo(3),
   },
   {
-    id: "product-sync-notes",
-    title: "Product sync — Mar 12",
     content: `Attendees: me, Sam, Priya, Alex
 
 ## Decisions
@@ -84,13 +82,13 @@ The goal isn't an audience. The goal is a habit of thinking in public, where laz
 - [ ] Alex: propose the shorter interview loop
 
 Next sync: Mar 19, same time.`,
-    tags: ["work", "meetings"],
     createdAt: hoursAgo(50),
+    id: "product-sync-notes",
+    tags: ["work", "meetings"],
+    title: "Product sync — Mar 12",
     updatedAt: hoursAgo(48),
   },
   {
-    id: "project-ideas",
-    title: "Project ideas",
     content: `Things I might build when there's a free weekend:
 
 - **Shelf** — a read-later app that actually deletes things. Anything unread after 30 days disappears. The queue guilt is the product.
@@ -100,13 +98,13 @@ Next sync: Mar 19, same time.`,
 - **Trail conditions** — crowd-sourced "is it muddy?" for local trails. Binary answer, photo optional.
 
 Rule of thumb: if I can't build the core loop in a weekend, it goes on the someday list, and the someday list is a lie.`,
-    tags: ["ideas"],
     createdAt: hoursAgo(30),
+    id: "project-ideas",
+    tags: ["ideas"],
+    title: "Project ideas",
     updatedAt: hoursAgo(26),
   },
   {
-    id: "reading-list",
-    title: "Reading list",
     content: `## Now reading
 - **The Making of the Atomic Bomb** — Rhodes. Slow, worth it. The Szilard chapters are the best thing I've read this year.
 
@@ -120,13 +118,13 @@ Rule of thumb: if I can't build the core loop in a weekend, it goes on the somed
 
 ## Finished
 - **Tomorrow, and Tomorrow, and Tomorrow** — better about collaboration than any management book. The Ichigo chapters dragged.`,
-    tags: ["reading"],
     createdAt: hoursAgo(120),
+    id: "reading-list",
+    tags: ["reading"],
+    title: "Reading list",
     updatedAt: hoursAgo(96),
   },
   {
-    id: "weeknight-ragu",
-    title: "Weeknight ragù",
     content: `Faster than the Sunday version, still tastes like you tried. Serves 4.
 
 ## Ingredients
@@ -148,8 +146,10 @@ Rule of thumb: if I can't build the core loop in a weekend, it goes on the somed
 6. Finish the pasta in the sauce with a ladle of pasta water. Parmesan off the heat.
 
 Notes: the milk is non-negotiable, it rounds out the acidity. Leftovers are better the next day on toast.`,
-    tags: ["cooking"],
     createdAt: hoursAgo(240),
+    id: "weeknight-ragu",
+    tags: ["cooking"],
+    title: "Weeknight ragù",
     updatedAt: hoursAgo(240),
   },
 ];

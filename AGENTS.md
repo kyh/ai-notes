@@ -61,8 +61,12 @@ gate):
 pnpm verify     # typecheck · lint · format
 ```
 
-`format` is `oxfmt --check` and `lint` is `--deny-warnings`, so `verify` fails rather than
-rewrites. Use `pnpm format:fix` / `pnpm lint:fix` to apply. `pnpm test` is wired to Node's
+`format` is `oxfmt --check` and `lint` is `oxlint --report-unused-disable-directives`, so
+`verify` fails rather than rewrites. Lint is a clean gate: `oxlint.config.ts` extends the
+ultracite presets (`ultracite/oxlint/core`, `react`, `next`, `anti-slop`); every rule is an
+error and `no-await-in-loop` is the one deliberate override. Prefer fixing code over
+`oxlint-disable` comments; when a rule is genuinely wrong for a line, disable that line with a
+`-- reason`. Use `pnpm format:fix` / `pnpm lint:fix` to apply. `pnpm test` is wired to Node's
 built-in runner (`node --import tsx --test 'src/**/*.test.ts'`) but no tests are written yet,
 so it exits non-zero and is deliberately left out of `verify` — add `&& pnpm test` back with
 the first test file.
@@ -125,7 +129,7 @@ behind the Next.js origin in dev and deploys as one Vercel project in prod.
   alias — eve's compiler does not read tsconfig `paths`.
 - **The `disableTool()` files in `agent/tools/` are not dead code.** They are the only way to
   remove eve's built-in harness tools (bash, glob, grep, web_fetch, …).
-- **No `any`, no non-null `!`, no `as` casts** — enforced by `.oxlintrc.json`. Parse at the
+- **No `any`, no non-null `!`, no `as` casts** — enforced by `oxlint.config.ts`. Parse at the
   boundaries instead (stream events, tool payloads, `localStorage`) with the zod schemas in
   `src/lib/`.
 - **Add UI only via `pnpm dlx shadcn@latest add <name>`** (shadcn/ui **base-vega** style on

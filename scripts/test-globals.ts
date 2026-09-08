@@ -9,12 +9,12 @@ const entries = new Map<string, string>();
  * store under test is not the store that ships.
  */
 const memoryStorage: Storage = {
-  get length() {
-    return entries.size;
-  },
   clear: () => entries.clear(),
   getItem: (key) => entries.get(key) ?? null,
   key: (index) => [...entries.keys()][index] ?? null,
+  get length() {
+    return entries.size;
+  },
   removeItem: (key) => {
     entries.delete(key);
   },

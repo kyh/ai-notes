@@ -8,21 +8,21 @@ import { z } from "zod";
  * represented by a ~200 char snippet.
  */
 export const notesContextSchema = z.object({
+  activeNoteId: z.string().nullable(),
+  notes: z.array(
+    z.object({
+      content: z.string().optional(),
+      id: z.string(),
+      snippet: z.string(),
+      tags: z.array(z.string()),
+      title: z.string(),
+      updatedAt: z.string(),
+    }),
+  ),
   /** Current datetime, ISO 8601 with UTC instant. */
   now: z.string(),
   /** IANA timezone, e.g. "America/Los_Angeles". */
   timeZone: z.string(),
-  activeNoteId: z.string().nullable(),
-  notes: z.array(
-    z.object({
-      id: z.string(),
-      title: z.string(),
-      tags: z.array(z.string()),
-      updatedAt: z.string(),
-      snippet: z.string(),
-      content: z.string().optional(),
-    }),
-  ),
 });
 
 export type NotesContext = z.infer<typeof notesContextSchema>;

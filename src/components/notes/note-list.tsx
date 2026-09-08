@@ -19,17 +19,17 @@ const noteSnippet = (content: string) =>
     .split("\n")
     .map((line) =>
       line
-        .replace(/^#{1,6}\s+/, "")
-        .replace(/^[-*]\s+(\[[ xX]\]\s+)?/, "")
-        .replace(/^\d+[.)]\s+/, "")
-        .replace(/^>\s?/, "")
-        .replace(/(\*\*|\*|`)/g, ""),
+        .replace(/^#{1,6}\s+/u, "")
+        .replace(/^[-*]\s+(?:\[[ xX]\]\s+)?/u, "")
+        .replace(/^\d+[.)]\s+/u, "")
+        .replace(/^>\s?/u, "")
+        .replaceAll(/(?:\*\*|\*|`)/gu, ""),
     )
-    .filter((line) => line.trim() !== "" && !/^-{3,}$/.test(line.trim()))
+    .filter((line) => line.trim() !== "" && !/^-{3,}$/u.test(line.trim()))
     .join(" ")
     .slice(0, 160);
 
-export function NoteList() {
+export const NoteList = () => {
   const notes = useNotesStore((state) => state.notes);
   const activeNoteId = useNotesStore((state) => state.activeNoteId);
   const setActiveNote = useNotesStore((state) => state.setActiveNote);
@@ -163,4 +163,4 @@ export function NoteList() {
       </ScrollArea>
     </div>
   );
-}
+};

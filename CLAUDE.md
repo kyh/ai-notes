@@ -45,8 +45,10 @@ pnpm lint:fix     # oxlint --fix
 pnpm format:fix   # oxfmt --write
 ```
 
-`lint` and `format` are check-only (`--deny-warnings`, `--check`) so `verify` fails instead
-of rewriting the tree. `pnpm test` runs Node's built-in runner via tsx, but no tests are
+`lint` and `format` are check-only so `verify` fails instead of rewriting the tree. `lint` is
+a clean gate: `oxlint.config.ts` extends the ultracite presets (core, react, next, anti-slop),
+every rule is an error, and `no-await-in-loop` is the one deliberate override. Fix the code,
+don't add config overrides; a `// oxlint-disable-next-line rule -- why` needs a stated reason. `pnpm test` runs Node's built-in runner via tsx, but no tests are
 written yet, so it is deliberately not part of `pnpm verify` (a node:test run that matches no
 files exits non-zero); add `&& pnpm test` back with the first test file. There is no CI
 workflow — `pnpm verify` is the gate.

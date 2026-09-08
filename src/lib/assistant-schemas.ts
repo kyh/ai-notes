@@ -16,16 +16,16 @@ import { noteSchema } from "./note-schema";
 // -----------------------------------------------------------------------------
 
 export const createNoteInputSchema = z.object({
-  title: z.string().describe("Title of the note"),
   content: z.string().describe("Markdown body of the note"),
   tags: z.array(z.string()).describe("Lowercase, single-word tags (e.g. 'work', 'ideas')"),
+  title: z.string().describe("Title of the note"),
 });
 
 export const updateNoteInputSchema = z.object({
-  id: z.string().describe("Id of the note to update"),
-  title: z.string().optional().describe("New title, if changing it"),
   content: z.string().optional().describe("Full replacement markdown body, if changing it"),
+  id: z.string().describe("Id of the note to update"),
   tags: z.array(z.string()).optional().describe("Full replacement tag list, if changing it"),
+  title: z.string().optional().describe("New title, if changing it"),
 });
 
 export const deleteNoteInputSchema = z.object({

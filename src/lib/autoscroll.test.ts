@@ -1,12 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import {
-  BOTTOM_TOLERANCE_PX,
-  distanceFromBottom,
-  isAtBottom,
-  type ScrollGeometry,
-} from "@/lib/autoscroll";
+import { BOTTOM_TOLERANCE_PX, distanceFromBottom, isAtBottom } from "@/lib/autoscroll";
+import type { ScrollGeometry } from "@/lib/autoscroll";
 
 /** A 400px-tall viewport holding `contentHeight` of transcript, scrolled to `scrollTop`. */
 const viewport = (contentHeight: number, scrollTop: number): ScrollGeometry => ({

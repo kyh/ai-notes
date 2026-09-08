@@ -10,8 +10,8 @@ const TEST_GLOB = "src/**/*.test.ts";
  * what lets an empty run fail instead of quietly succeeding.
  */
 const stream = run({
-  globPatterns: [TEST_GLOB],
   execArgv: ["--import", "tsx", "--import", "./scripts/test-globals.ts"],
+  globPatterns: [TEST_GLOB],
 });
 
 let testsRun = 0;
@@ -19,7 +19,9 @@ let runSucceeded = false;
 
 stream.on("test:summary", (summary) => {
   // Per-file summaries carry a `file`; the run-wide one does not.
-  if (summary.file !== undefined) return;
+  if (summary.file !== undefined) {
+    return;
+  }
   testsRun = summary.counts.tests;
   runSucceeded = summary.success;
 });
@@ -30,7 +32,9 @@ stream.on("end", () => {
     process.exitCode = 1;
     return;
   }
-  if (!runSucceeded) process.exitCode = 1;
+  if (!runSucceeded) {
+    process.exitCode = 1;
+  }
 });
 
 stream.compose(new SpecReporter()).pipe(process.stdout);
