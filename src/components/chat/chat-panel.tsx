@@ -14,7 +14,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { isAtBottom } from "@/lib/autoscroll";
-import { applyStreamEvent, type AgentStreamEvent } from "@/lib/chat-bridge";
+import { applyStreamEvent } from "@/lib/chat-bridge";
+import type { AgentStreamEvent } from "@/lib/chat-bridge";
 import type { NotesContext } from "@/lib/notes-context";
 import { useNotesStore } from "@/lib/notes-store";
 import { cn } from "cn";
@@ -31,18 +32,18 @@ const EXAMPLE_PROMPTS = [
 const buildNotesContext = (): NotesContext => {
   const { notes, activeNoteId } = useNotesStore.getState();
   return {
-    now: new Date().toISOString(),
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     activeNoteId,
     notes: notes.map((note) => ({
-      id: note.id,
-      title: note.title,
-      tags: note.tags,
-      updatedAt: note.updatedAt,
-      snippet: note.content.slice(0, 200),
       // Full body only for the active note; `undefined` is dropped by JSON.
       content: note.id === activeNoteId ? note.content : undefined,
+      id: note.id,
+      snippet: note.content.slice(0, 200),
+      tags: note.tags,
+      title: note.title,
+      updatedAt: note.updatedAt,
     })),
+    now: new Date().toISOString(),
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   };
 };
 
@@ -53,7 +54,9 @@ const buildNotesContext = (): NotesContext => {
  * resolver once at store creation, so React state would go stale.
  */
 const resolveAuthHeaders = (): Readonly<Record<string, string>> => {
-  if (typeof window === "undefined") return {};
+  if (typeof window === "undefined") {
+    return {};
+  }
   const key = window.localStorage.getItem(GATEWAY_API_KEY_STORAGE_KEY);
   return key !== null && key.length > 0 ? { authorization: `Bearer ${key}` } : {};
 };
@@ -62,9 +65,14 @@ const applyToolResult = (event: AgentStreamEvent): void => {
   // Read the store per event: a create and its follow-up update arrive as two
   // events, and the second has to see the first one's note.
   const notification = applyStreamEvent(event, useNotesStore.getState());
-  if (notification === null) return;
-  if (notification.tone === "error") toast.error(notification.message);
-  else toast.success(notification.message);
+  if (notification === null) {
+    return;
+  }
+  if (notification.tone === "error") {
+    toast.error(notification.message);
+  } else {
+    toast.success(notification.message);
+  }
 };
 
 /**
@@ -73,14 +81,113 @@ const applyToolResult = (event: AgentStreamEvent): void => {
  * All of them route back to the key dialog.
  */
 const isAuthError = (error: Error): boolean =>
-  /unauthorized|forbidden|authentication|api.?key|credential|401|403/i.test(error.message);
+  /unauthorized|forbidden|authentication|api.?key|credential|401|403/iu.test(error.message);
+
+// -----------------------------------------------------------------------------
+// Message rendering — eve's default reducer projects `data.messages` in the
+// AI SDK UIMessage convention: text parts plus `dynamic-tool` parts.
+// -----------------------------------------------------------------------------
+
+type DynamicToolPart = Extract<EveMessagePart, { type: "dynamic-tool" }>;
+
+const TOOL_LABELS = {
+  create_note: { active: "Creating note", done: "Created note" },
+  delete_note: { active: "Deleting note", done: "Deleted note" },
+  update_note: { active: "Updating note", done: "Updated note" },
+} satisfies Record<string, { active: string; done: string }>;
+
+const isLabeledTool = (toolName: string): toolName is keyof typeof TOOL_LABELS =>
+  toolName in TOOL_LABELS;
+
+/** Loose view of tool inputs, for the chip detail line only. */
+const toolInputPreviewSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().optional(),
+});
+
+type ToolOutcome = "active" | "done" | "failed";
+
+const toolOutcome = (state: DynamicToolPart["state"]): ToolOutcome => {
+  if (state === "output-available") {
+    return "done";
+  }
+  if (state === "output-error" || state === "output-denied") {
+    return "failed";
+  }
+  return "active";
+};
+
+const TOOL_ICONS: Record<ToolOutcome, React.ReactNode> = {
+  active: <Loader2Icon className="size-3 shrink-0 animate-spin" />,
+  done: <CheckIcon className="size-3 shrink-0" />,
+  failed: <XIcon className="size-3 shrink-0" />,
+};
+
+const ToolChip = ({ part }: { part: DynamicToolPart }) => {
+  const notes = useNotesStore((state) => state.notes);
+
+  if (!isLabeledTool(part.toolName)) {
+    return null;
+  }
+  const labels = TOOL_LABELS[part.toolName];
+
+  const outcome = toolOutcome(part.state);
+  const label = { active: labels.active, done: labels.done, failed: "Tool call failed" }[outcome];
+
+  let detail = "";
+  if (part.state === "input-available" || part.state === "output-available") {
+    const input = toolInputPreviewSchema.safeParse(part.input);
+    if (input.success) {
+      detail =
+        part.toolName === "create_note"
+          ? (input.data.title ?? "")
+          : (notes.find((n) => n.id === input.data.id)?.title ?? "");
+    }
+  }
+
+  return (
+    <div className="flex w-fit max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-xs text-muted-foreground">
+      {TOOL_ICONS[outcome]}
+      <span className="truncate">
+        {label}
+        {detail ? ` — ${detail}` : ""}
+      </span>
+    </div>
+  );
+};
+
+const ChatMessage = ({ message }: { message: EveMessage }) => {
+  if (message.role === "user") {
+    const text = message.parts.map((part) => (part.type === "text" ? part.text : "")).join("");
+    return (
+      <div className="max-w-[85%] self-end rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground">
+        {text}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex max-w-full flex-col gap-2 self-start">
+      {message.parts.map((part, index) => {
+        const key = `${message.id}-${index}`;
+        if (part.type === "text" && part.text.length > 0) {
+          return <MarkdownPreview key={key} content={part.text} />;
+        }
+        if (part.type === "dynamic-tool") {
+          return <ToolChip key={key} part={part} />;
+        }
+        return null;
+      })}
+    </div>
+  );
+};
 
 interface ChatPanelProps {
   open: boolean;
   onClose: () => void;
 }
 
-export function ChatPanel({ open, onClose }: ChatPanelProps) {
+export const ChatPanel = ({ open, onClose }: ChatPanelProps) => {
   const [input, setInput] = React.useState("");
   const [showApiKeyDialog, setShowApiKeyDialog] = React.useState(false);
   const [apiKey, , removeApiKey] = useLocalStorage(GATEWAY_API_KEY_STORAGE_KEY, "");
@@ -90,7 +197,6 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
 
   const agent = useEveAgent({
     headers: resolveAuthHeaders,
-    onEvent: applyToolResult,
     onError: (error) => {
       if (isAuthError(error)) {
         removeApiKey();
@@ -100,6 +206,7 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
         toast.error(error.message || "Something went wrong");
       }
     },
+    onEvent: applyToolResult,
   });
   const { data, status, error } = agent;
 
@@ -111,7 +218,9 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
   React.useEffect(() => {
     const viewport = viewportRef.current;
     const transcript = transcriptRef.current;
-    if (!viewport || !transcript) return;
+    if (!viewport || !transcript) {
+      return;
+    }
 
     // Only user scrolls decide whether to keep following; the jump below is
     // instant so the scroll it fires re-reads a bottomed-out viewport rather
@@ -120,7 +229,9 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
       pinnedToBottomRef.current = isAtBottom(viewport);
     };
     const observer = new ResizeObserver(() => {
-      if (pinnedToBottomRef.current) viewport.scrollTop = viewport.scrollHeight;
+      if (pinnedToBottomRef.current) {
+        viewport.scrollTop = viewport.scrollHeight;
+      }
     });
 
     viewport.addEventListener("scroll", handleScroll, { passive: true });
@@ -133,19 +244,28 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
 
   const needsKey = !apiKey && process.env.NODE_ENV !== "development";
 
-  const send = (text: string) => {
+  const send = async (text: string) => {
     const trimmed = text.trim();
-    if (!trimmed || isLoading) return;
+    if (!trimmed || isLoading) {
+      return;
+    }
     if (needsKey) {
       setShowApiKeyDialog(true);
       return;
     }
-    agent.send(trimmed, { clientContext: buildNotesContext() }).catch(() => undefined); // failures surface via status/error/onError
+    const turn = agent.send(trimmed, { clientContext: buildNotesContext() });
     setInput("");
+    try {
+      await turn;
+    } catch {
+      // Failures surface via status/error/onError.
+    }
   };
 
   const handleTextareaFocus = () => {
-    if (needsKey) setShowApiKeyDialog(true);
+    if (needsKey) {
+      setShowApiKeyDialog(true);
+    }
   };
 
   return (
@@ -263,90 +383,4 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
       <ApiKeyDialog open={showApiKeyDialog} onOpenChange={setShowApiKeyDialog} />
     </>
   );
-}
-
-// -----------------------------------------------------------------------------
-// Message rendering — eve's default reducer projects `data.messages` in the
-// AI SDK UIMessage convention: text parts plus `dynamic-tool` parts.
-// -----------------------------------------------------------------------------
-
-function ChatMessage({ message }: { message: EveMessage }) {
-  if (message.role === "user") {
-    const text = message.parts.map((part) => (part.type === "text" ? part.text : "")).join("");
-    return (
-      <div className="max-w-[85%] self-end rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground">
-        {text}
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex max-w-full flex-col gap-2 self-start">
-      {message.parts.map((part, index) => {
-        const key = `${message.id}-${index}`;
-        if (part.type === "text" && part.text.length > 0) {
-          return <MarkdownPreview key={key} content={part.text} />;
-        }
-        if (part.type === "dynamic-tool") {
-          return <ToolChip key={key} part={part} />;
-        }
-        return null;
-      })}
-    </div>
-  );
-}
-
-type DynamicToolPart = Extract<EveMessagePart, { type: "dynamic-tool" }>;
-
-const TOOL_LABELS = {
-  create_note: { active: "Creating note", done: "Created note" },
-  update_note: { active: "Updating note", done: "Updated note" },
-  delete_note: { active: "Deleting note", done: "Deleted note" },
-} satisfies Record<string, { active: string; done: string }>;
-
-const isLabeledTool = (toolName: string): toolName is keyof typeof TOOL_LABELS =>
-  toolName in TOOL_LABELS;
-
-/** Loose view of tool inputs, for the chip detail line only. */
-const toolInputPreviewSchema = z.object({
-  title: z.string().optional(),
-  id: z.string().optional(),
-});
-
-function ToolChip({ part }: { part: DynamicToolPart }) {
-  const notes = useNotesStore((state) => state.notes);
-
-  if (!isLabeledTool(part.toolName)) return null;
-  const labels = TOOL_LABELS[part.toolName];
-
-  const done = part.state === "output-available";
-  const failed = part.state === "output-error" || part.state === "output-denied";
-  const label = done ? labels.done : failed ? "Tool call failed" : labels.active;
-
-  let detail = "";
-  if (part.state === "input-available" || part.state === "output-available") {
-    const input = toolInputPreviewSchema.safeParse(part.input);
-    if (input.success) {
-      detail =
-        part.toolName === "create_note"
-          ? (input.data.title ?? "")
-          : (notes.find((n) => n.id === input.data.id)?.title ?? "");
-    }
-  }
-
-  return (
-    <div className="flex w-fit max-w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-xs text-muted-foreground">
-      {done ? (
-        <CheckIcon className="size-3 shrink-0" />
-      ) : failed ? (
-        <XIcon className="size-3 shrink-0" />
-      ) : (
-        <Loader2Icon className="size-3 shrink-0 animate-spin" />
-      )}
-      <span className="truncate">
-        {label}
-        {detail ? ` — ${detail}` : ""}
-      </span>
-    </div>
-  );
-}
+};

@@ -1,5 +1,5 @@
 import { NotesApp } from "@/components/notes/notes-app";
 
-export default function Page() {
-  return <NotesApp />;
-}
+const Page = () => <NotesApp />;
+
+export default Page;

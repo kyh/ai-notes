@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { resolveToolResult, type AgentStreamEvent } from "@/lib/chat-bridge";
+import { resolveToolResult } from "@/lib/chat-bridge";
+import type { AgentStreamEvent } from "@/lib/chat-bridge";
 import type { Note } from "@/lib/note-schema";
 
 type ActionResultEvent = Extract<AgentStreamEvent, { type: "action.result" }>;
@@ -17,22 +18,22 @@ const toolResult = (
   output: ToolResult["output"],
   overrides: ResultOverrides = {},
 ): AgentStreamEvent => ({
-  type: "action.result",
   data: {
-    result: { callId: "call-1", kind: "tool-result", output, toolName, isError: overrides.isError },
+    result: { callId: "call-1", isError: overrides.isError, kind: "tool-result", output, toolName },
     sequence: 1,
-    stepIndex: 0,
     status: overrides.status ?? "completed",
+    stepIndex: 0,
     turnId: "turn-1",
   },
+  type: "action.result",
 });
 
 const note = (overrides: Partial<Note> = {}): Note => ({
-  id: "note-1",
-  title: "Standup",
   content: "- shipped the bridge",
-  tags: ["work"],
   createdAt: "2026-01-01T00:00:00.000Z",
+  id: "note-1",
+  tags: ["work"],
+  title: "Standup",
   updatedAt: "2026-01-01T00:00:00.000Z",
   ...overrides,
 });
@@ -44,8 +45,8 @@ describe("create_note", () => {
 
     assert.deepEqual(outcome, {
       kind: "insert",
-      note: created,
       message: 'Created "Groceries"',
+      note: created,
     });
   });
 
@@ -68,10 +69,10 @@ describe("update_note", () => {
     );
 
     assert.deepEqual(outcome, {
-      kind: "update",
       id: "note-1",
-      patch: { tags: ["work", "urgent"] },
+      kind: "update",
       message: 'Updated "Standup"',
+      patch: { tags: ["work", "urgent"] },
     });
   });
 
@@ -82,10 +83,10 @@ describe("update_note", () => {
     );
 
     assert.deepEqual(outcome, {
-      kind: "update",
       id: "note-1",
-      patch: { title: "Standup notes" },
+      kind: "update",
       message: 'Updated "Standup notes"',
+      patch: { title: "Standup notes" },
     });
   });
 
@@ -93,10 +94,10 @@ describe("update_note", () => {
     const outcome = resolveToolResult(toolResult("update_note", { id: "note-1" }), [note()]);
 
     assert.deepEqual(outcome, {
-      kind: "update",
       id: "note-1",
-      patch: {},
+      kind: "update",
       message: 'Updated "Standup"',
+      patch: {},
     });
   });
 
@@ -125,7 +126,7 @@ describe("delete_note", () => {
   test("resolves the id against the store so the toast can name the note", () => {
     const outcome = resolveToolResult(toolResult("delete_note", { id: "note-1" }), [note()]);
 
-    assert.deepEqual(outcome, { kind: "delete", id: "note-1", message: 'Deleted "Standup"' });
+    assert.deepEqual(outcome, { id: "note-1", kind: "delete", message: 'Deleted "Standup"' });
   });
 
   test("does nothing when the note is already gone", () => {
@@ -172,7 +173,6 @@ describe("events that must not reach the store", () => {
   test("a partial snapshot from a still-running tool generator", () => {
     const outcome = resolveToolResult(
       {
-        type: "action.partial",
         data: {
           result: {
             callId: "call-1",
@@ -184,6 +184,7 @@ describe("events that must not reach the store", () => {
           stepIndex: 0,
           turnId: "turn-1",
         },
+        type: "action.partial",
       },
       [],
     );
@@ -193,7 +194,7 @@ describe("events that must not reach the store", () => {
 
   test("a turn that was cancelled part-way through", () => {
     const outcome = resolveToolResult(
-      { type: "turn.cancelled", data: { sequence: 2, turnId: "turn-1" } },
+      { data: { sequence: 2, turnId: "turn-1" }, type: "turn.cancelled" },
       [note()],
     );
 
@@ -206,20 +207,20 @@ describe("delegated child sessions", () => {
     const created = note({ id: "note-3", title: "From a subagent" });
     const outcome = resolveToolResult(
       {
-        type: "subagent.event",
         data: {
           callId: "call-2",
-          subagentName: "researcher",
           event: toolResult("create_note", { note: created }),
+          subagentName: "researcher",
         },
+        type: "subagent.event",
       },
       [],
     );
 
     assert.deepEqual(outcome, {
       kind: "insert",
-      note: created,
       message: 'Created "From a subagent"',
+      note: created,
     });
   });
 });

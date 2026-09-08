@@ -49,8 +49,12 @@ export const resolveToolResult = (
 ): BridgeOutcome => {
   // Delegation is forbidden by the instructions, but if the model strays,
   // unwrap the child's events so its tool results still reach the store.
-  if (event.type === "subagent.event") return resolveToolResult(event.data.event, notes);
-  if (event.type !== "action.result") return NONE;
+  if (event.type === "subagent.event") {
+    return resolveToolResult(event.data.event, notes);
+  }
+  if (event.type !== "action.result") {
+    return NONE;
+  }
 
   const { status, result } = event.data;
   if (status !== "completed" || result.kind !== "tool-result" || result.isError === true) {
@@ -60,13 +64,17 @@ export const resolveToolResult = (
   switch (result.toolName) {
     case "create_note": {
       const payload = createNotePayloadSchema.safeParse(result.output);
-      if (!payload.success) return NONE;
+      if (!payload.success) {
+        return NONE;
+      }
       const { note } = payload.data;
-      return { kind: "insert", note, message: `Created "${note.title}"` };
+      return { kind: "insert", message: `Created "${note.title}"`, note };
     }
     case "update_note": {
       const payload = updateNotePayloadSchema.safeParse(result.output);
-      if (!payload.success) return NONE;
+      if (!payload.success) {
+        return NONE;
+      }
       const { id, title, content, tags } = payload.data;
       const note = notes.find((n) => n.id === id);
       if (!note) {
@@ -76,20 +84,31 @@ export const resolveToolResult = (
         };
       }
       const patch: NotePatch = {};
-      if (title !== undefined) patch.title = title;
-      if (content !== undefined) patch.content = content;
-      if (tags !== undefined) patch.tags = tags;
-      return { kind: "update", id, patch, message: `Updated "${patch.title ?? note.title}"` };
+      if (title !== undefined) {
+        patch.title = title;
+      }
+      if (content !== undefined) {
+        patch.content = content;
+      }
+      if (tags !== undefined) {
+        patch.tags = tags;
+      }
+      return { id, kind: "update", message: `Updated "${patch.title ?? note.title}"`, patch };
     }
     case "delete_note": {
       const payload = deleteNotePayloadSchema.safeParse(result.output);
-      if (!payload.success) return NONE;
+      if (!payload.success) {
+        return NONE;
+      }
       const note = notes.find((n) => n.id === payload.data.id);
-      if (!note) return NONE;
-      return { kind: "delete", id: note.id, message: `Deleted "${note.title}"` };
+      if (!note) {
+        return NONE;
+      }
+      return { id: note.id, kind: "delete", message: `Deleted "${note.title}"` };
     }
-    default:
+    default: {
       return NONE;
+    }
   }
 };
 
@@ -115,18 +134,23 @@ export const applyStreamEvent = (
 ): Notification | null => {
   const outcome = resolveToolResult(event, store.notes);
   switch (outcome.kind) {
-    case "insert":
+    case "insert": {
       store.insertNote(outcome.note);
-      return { tone: "success", message: outcome.message };
-    case "update":
+      return { message: outcome.message, tone: "success" };
+    }
+    case "update": {
       store.updateNote(outcome.id, outcome.patch);
-      return { tone: "success", message: outcome.message };
-    case "delete":
+      return { message: outcome.message, tone: "success" };
+    }
+    case "delete": {
       store.deleteNote(outcome.id);
-      return { tone: "success", message: outcome.message };
-    case "error":
-      return { tone: "error", message: outcome.message };
-    case "none":
+      return { message: outcome.message, tone: "success" };
+    }
+    case "error": {
+      return { message: outcome.message, tone: "error" };
+    }
+    default: {
       return null;
+    }
   }
 };

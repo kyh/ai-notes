@@ -28,7 +28,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useNotesStore } from "@/lib/notes-store";
 
-export function NoteEditor() {
+export const NoteEditor = () => {
   const notes = useNotesStore((state) => state.notes);
   const activeNoteId = useNotesStore((state) => state.activeNoteId);
   const updateNote = useNotesStore((state) => state.updateNote);
@@ -63,7 +63,9 @@ export function NoteEditor() {
   const addTag = () => {
     const tag = tagInput.trim().toLowerCase();
     setTagInput("");
-    if (!tag || activeNote.tags.includes(tag)) return;
+    if (!tag || activeNote.tags.includes(tag)) {
+      return;
+    }
     updateNote(activeNote.id, { tags: [...activeNote.tags, tag] });
   };
 
@@ -182,4 +184,4 @@ export function NoteEditor() {
       </Dialog>
     </div>
   );
-}
+};

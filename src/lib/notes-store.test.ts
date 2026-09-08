@@ -1,36 +1,37 @@
 import assert from "node:assert/strict";
 import { beforeEach, describe, test } from "node:test";
 
-import { applyStreamEvent, type AgentStreamEvent } from "@/lib/chat-bridge";
+import { applyStreamEvent } from "@/lib/chat-bridge";
+import type { AgentStreamEvent } from "@/lib/chat-bridge";
 import type { Note } from "@/lib/note-schema";
 import { useNotesStore } from "@/lib/notes-store";
 
 const note = (overrides: Partial<Note> = {}): Note => ({
-  id: "note-1",
-  title: "Standup",
   content: "- shipped the bridge",
-  tags: ["work"],
   createdAt: "2026-01-01T00:00:00.000Z",
+  id: "note-1",
+  tags: ["work"],
+  title: "Standup",
   updatedAt: "2026-01-01T00:00:00.000Z",
   ...overrides,
 });
 
 const seedStore = (notes: Note[], activeNoteId: string | null = null) => {
-  useNotesStore.setState({ notes, activeNoteId, seeded: true });
+  useNotesStore.setState({ activeNoteId, notes, seeded: true });
 };
 
 type ActionResultEvent = Extract<AgentStreamEvent, { type: "action.result" }>;
 type ToolResult = Extract<ActionResultEvent["data"]["result"], { kind: "tool-result" }>;
 
 const toolResult = (toolName: string, output: ToolResult["output"]): AgentStreamEvent => ({
-  type: "action.result",
   data: {
     result: { callId: "call-1", kind: "tool-result", output, toolName },
     sequence: 1,
-    stepIndex: 0,
     status: "completed",
+    stepIndex: 0,
     turnId: "turn-1",
   },
+  type: "action.result",
 });
 
 /** Mirrors the chat panel: the store is re-read for every streamed event. */
@@ -72,7 +73,7 @@ describe("updateNote", () => {
 
     useNotesStore.getState().updateNote("note-1", { tags: ["work", "urgent"] });
 
-    const updated = useNotesStore.getState().notes[0];
+    const [updated] = useNotesStore.getState().notes;
     assert.deepEqual(updated?.tags, ["work", "urgent"]);
     assert.equal(updated?.title, "Standup");
     assert.equal(updated?.content, "- shipped the bridge");
@@ -143,7 +144,7 @@ describe("seed", () => {
 
 describe("streaming tool results into the store", () => {
   test("a create-then-update turn lands as one note carrying both changes", () => {
-    const created = note({ id: "note-7", title: "Meeting", tags: [] });
+    const created = note({ id: "note-7", tags: [], title: "Meeting" });
 
     const notifications = stream(
       toolResult("create_note", { note: created }),
@@ -155,13 +156,13 @@ describe("streaming tool results into the store", () => {
     assert.equal(notes[0]?.title, "Meeting");
     assert.deepEqual(notes[0]?.tags, ["meeting"]);
     assert.deepEqual(notifications, [
-      { tone: "success", message: 'Created "Meeting"' },
-      { tone: "success", message: 'Updated "Meeting"' },
+      { message: 'Created "Meeting"', tone: "success" },
+      { message: 'Updated "Meeting"', tone: "success" },
     ]);
   });
 
   test("a stream cut short keeps the mutations that already landed", () => {
-    const created = note({ id: "note-7", title: "Meeting", tags: [] });
+    const created = note({ id: "note-7", tags: [], title: "Meeting" });
 
     stream(toolResult("create_note", { note: created }));
     // The turn aborts here: the follow-up update_note result never arrives.
@@ -203,7 +204,7 @@ describe("streaming tool results into the store", () => {
       ["note-2"],
     );
     assert.equal(useNotesStore.getState().activeNoteId, null);
-    assert.deepEqual(notifications, [{ tone: "success", message: 'Deleted "Standup"' }]);
+    assert.deepEqual(notifications, [{ message: 'Deleted "Standup"', tone: "success" }]);
   });
 
   test("an update aimed at a note the user just deleted surfaces as an error", () => {
@@ -216,8 +217,8 @@ describe("streaming tool results into the store", () => {
 
     assert.deepEqual(useNotesStore.getState().notes, []);
     assert.deepEqual(notifications, [
-      { tone: "success", message: 'Deleted "Standup"' },
-      { tone: "error", message: "The assistant tried to update a note that no longer exists" },
+      { message: 'Deleted "Standup"', tone: "success" },
+      { message: "The assistant tried to update a note that no longer exists", tone: "error" },
     ]);
   });
 });
