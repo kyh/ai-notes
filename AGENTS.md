@@ -54,11 +54,10 @@ To reset to the seed, clear the browser's `localStorage` for `localhost:3000`.
 
 ## Verify a change end-to-end
 
-Static gate — **run before every commit** (there is no CI workflow in this repo; this is the
-gate):
+Static gate — **run before every commit**:
 
 ```sh
-pnpm verify     # typecheck · lint · format
+pnpm verify     # typecheck · lint · format · test
 ```
 
 `format` is `oxfmt --check` and `lint` is `oxlint --report-unused-disable-directives`, so
@@ -66,10 +65,10 @@ pnpm verify     # typecheck · lint · format
 ultracite presets (`ultracite/oxlint/core`, `react`, `next`, `anti-slop`); every rule is an
 error and `no-await-in-loop` is the one deliberate override. Prefer fixing code over
 `oxlint-disable` comments; when a rule is genuinely wrong for a line, disable that line with a
-`-- reason`. Use `pnpm format:fix` / `pnpm lint:fix` to apply. `pnpm test` is wired to Node's
-built-in runner (`node --import tsx --test 'src/**/*.test.ts'`) but no tests are written yet,
-so it exits non-zero and is deliberately left out of `verify` — add `&& pnpm test` back with
-the first test file.
+`-- reason`. Use `pnpm format:fix` / `pnpm lint:fix` to apply. `pnpm test` runs Node's
+built-in runner over `src/**/*.test.ts` via `scripts/test.ts` (which fails if no tests ran) and
+is part of `verify`. CI (`.github/workflows/ci.yml`) runs typecheck, lint, format, test and
+`pnpm build` on every PR and push to `main`.
 
 Runtime — drive the real UI with [agent-browser](https://github.com/vercel-labs/agent-browser).
 This exact sequence was run end-to-end against the seeded app, twice, and leaves no state
