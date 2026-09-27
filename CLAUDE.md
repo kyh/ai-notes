@@ -31,6 +31,8 @@ src/components/chat/chat-panel.tsx  # useEveAgent bridge: clientContext out, act
 src/components/chat/api-key-dialog.tsx
 src/components/notes/           # notes-app, note-list, note-editor, markdown-preview
 src/lib/notes-store.ts          # zustand store, seeds from src/lib/seed-notes.ts
+src/lib/agent/                  # agent-readiness: site copy (one source for JSX + Markdown), llms.txt, JSON-LD, Accept negotiation
+src/proxy.ts                    # Accept: text/markdown → /api/markdown/* rewrite (only invoked for markdown Accepts)
 ```
 
 Flow: chat panel `send({ message, clientContext: notesSnapshot })` → eve channel authenticates (user bearer key / OIDC / localhost) → dynamic model resolver picks the user's gateway key from session auth (fallback: server `AI_GATEWAY_API_KEY`) → tools return structured payloads → client `onEvent` zod-parses `action.result` events → store mutation + sonner toast.
