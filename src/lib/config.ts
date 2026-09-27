@@ -5,7 +5,7 @@ export const siteConfig = {
   creator: "@kaiyuhsu",
   description:
     "AI-native notes — capture, organize, and rewrite your notes in natural language. Forkable Next.js template.",
-  email: "im.kaiyu@gmail.com",
+  email: "kai@kyh.io",
   name: "AI Notes",
   repository,
   routes: ["", "/about", "/contact", "/privacy"],
