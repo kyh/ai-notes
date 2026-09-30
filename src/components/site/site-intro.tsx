@@ -14,9 +14,10 @@ export const SiteIntro = () => (
       <p key={text}>{text}</p>
     ))}
     <h2>When to use {siteConfig.name}</h2>
-    <ProseList items={whenToUse} />
+    <ProseList items={whenToUse} focus="untabbable" />
     <h2>More</h2>
     <ProseList
+      focus="untabbable"
       items={[
         ...prosePages.map((page) => ({ href: page.path, label: page.title })),
         { href: "/llms.txt", label: "llms.txt" },
