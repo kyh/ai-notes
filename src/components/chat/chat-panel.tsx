@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import type { MessageStreamEvent } from "eve/client";
 import type { EveMessage, EveMessagePart } from "eve/react";
 import { useEveAgent } from "eve/react";
 import { ArrowUpIcon, CheckIcon, KeyIcon, Loader2Icon, SparklesIcon, XIcon } from "lucide-react";
@@ -15,7 +16,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { isAtBottom } from "@/lib/autoscroll";
 import { applyStreamEvent } from "@/lib/chat-bridge";
-import type { AgentStreamEvent } from "@/lib/chat-bridge";
 import type { NotesContext } from "@/lib/notes-context";
 import { useNotesStore } from "@/lib/notes-store";
 import { cn } from "cn";
@@ -61,7 +61,7 @@ const resolveAuthHeaders = (): Readonly<Record<string, string>> => {
   return key !== null && key.length > 0 ? { authorization: `Bearer ${key}` } : {};
 };
 
-const applyToolResult = (event: AgentStreamEvent): void => {
+const applyToolResult = (event: MessageStreamEvent): void => {
   // Read the store per event: a create and its follow-up update arrive as two
   // events, and the second has to see the first one's note.
   const notification = applyStreamEvent(event, useNotesStore.getState());

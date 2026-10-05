@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { beforeEach, describe, test } from "node:test";
+import type { MessageStreamEvent } from "eve/client";
 
 import { applyStreamEvent } from "@/lib/chat-bridge";
-import type { AgentStreamEvent } from "@/lib/chat-bridge";
 import type { Note } from "@/lib/note-schema";
 import { useNotesStore } from "@/lib/notes-store";
 
@@ -20,10 +20,10 @@ const seedStore = (notes: Note[], activeNoteId: string | null = null) => {
   useNotesStore.setState({ activeNoteId, notes, seeded: true });
 };
 
-type ActionResultEvent = Extract<AgentStreamEvent, { type: "action.result" }>;
+type ActionResultEvent = Extract<MessageStreamEvent, { type: "action.result" }>;
 type ToolResult = Extract<ActionResultEvent["data"]["result"], { kind: "tool-result" }>;
 
-const toolResult = (toolName: string, output: ToolResult["output"]): AgentStreamEvent => ({
+const toolResult = (toolName: string, output: ToolResult["output"]): MessageStreamEvent => ({
   data: {
     result: { callId: "call-1", kind: "tool-result", output, toolName },
     sequence: 1,
@@ -31,11 +31,12 @@ const toolResult = (toolName: string, output: ToolResult["output"]): AgentStream
     stepIndex: 0,
     turnId: "turn-1",
   },
+  meta: { at: "2026-01-01T00:00:00.000Z", id: "event-1" },
   type: "action.result",
 });
 
 /** Mirrors the chat panel: the store is re-read for every streamed event. */
-const stream = (...events: AgentStreamEvent[]) =>
+const stream = (...events: MessageStreamEvent[]) =>
   events.map((event) => applyStreamEvent(event, useNotesStore.getState()));
 
 beforeEach(() => {

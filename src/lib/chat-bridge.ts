@@ -9,15 +9,6 @@ import type { Note } from "@/lib/note-schema";
 import type { NotePatch, NotesState } from "@/lib/notes-store";
 
 /**
- * A child session's events arrive unstamped (no `meta`) inside
- * `subagent.event`; eve only exports the stamped union, so derive it.
- */
-export type AgentStreamEvent = Extract<
-  MessageStreamEvent,
-  { type: "subagent.event" }
->["data"]["event"];
-
-/**
  * What one streamed event asks the store to do. Keeping the decision separate
  * from the mutation is what makes it testable without React, a DOM, or a live
  * agent stream.
@@ -44,14 +35,9 @@ const NONE: BridgeOutcome = { kind: "none" };
  * toast copy and to notice a target note that no longer exists.
  */
 export const resolveToolResult = (
-  event: AgentStreamEvent,
+  event: MessageStreamEvent,
   notes: readonly Note[],
 ): BridgeOutcome => {
-  // Delegation is forbidden by the instructions, but if the model strays,
-  // unwrap the child's events so its tool results still reach the store.
-  if (event.type === "subagent.event") {
-    return resolveToolResult(event.data.event, notes);
-  }
   if (event.type !== "action.result") {
     return NONE;
   }
@@ -129,7 +115,7 @@ export interface Notification {
  * sees the first one's note.
  */
 export const applyStreamEvent = (
-  event: AgentStreamEvent,
+  event: MessageStreamEvent,
   store: NotesWriter,
 ): Notification | null => {
   const outcome = resolveToolResult(event, store.notes);

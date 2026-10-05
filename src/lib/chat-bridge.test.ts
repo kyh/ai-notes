@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import type { MessageStreamEvent } from "eve/client";
 
 import { resolveToolResult } from "@/lib/chat-bridge";
-import type { AgentStreamEvent } from "@/lib/chat-bridge";
 import type { Note } from "@/lib/note-schema";
 
-type ActionResultEvent = Extract<AgentStreamEvent, { type: "action.result" }>;
+type ActionResultEvent = Extract<MessageStreamEvent, { type: "action.result" }>;
 type ToolResult = Extract<ActionResultEvent["data"]["result"], { kind: "tool-result" }>;
 
 interface ResultOverrides {
@@ -17,7 +17,7 @@ const toolResult = (
   toolName: string,
   output: ToolResult["output"],
   overrides: ResultOverrides = {},
-): AgentStreamEvent => ({
+): MessageStreamEvent => ({
   data: {
     result: { callId: "call-1", isError: overrides.isError, kind: "tool-result", output, toolName },
     sequence: 1,
@@ -25,6 +25,7 @@ const toolResult = (
     stepIndex: 0,
     turnId: "turn-1",
   },
+  meta: { at: "2026-01-01T00:00:00.000Z", id: "event-1" },
   type: "action.result",
 });
 
@@ -184,6 +185,7 @@ describe("events that must not reach the store", () => {
           stepIndex: 0,
           turnId: "turn-1",
         },
+        meta: { at: "2026-01-01T00:00:00.000Z", id: "event-1" },
         type: "action.partial",
       },
       [],
@@ -194,33 +196,14 @@ describe("events that must not reach the store", () => {
 
   test("a turn that was cancelled part-way through", () => {
     const outcome = resolveToolResult(
-      { data: { sequence: 2, turnId: "turn-1" }, type: "turn.cancelled" },
+      {
+        data: { sequence: 2, turnId: "turn-1" },
+        meta: { at: "2026-01-01T00:00:00.000Z", id: "event-1" },
+        type: "turn.cancelled",
+      },
       [note()],
     );
 
     assert.deepEqual(outcome, { kind: "none" });
-  });
-});
-
-describe("delegated child sessions", () => {
-  test("unwraps a child's tool result so it still reaches the store", () => {
-    const created = note({ id: "note-3", title: "From a subagent" });
-    const outcome = resolveToolResult(
-      {
-        data: {
-          callId: "call-2",
-          event: toolResult("create_note", { note: created }),
-          subagentName: "researcher",
-        },
-        type: "subagent.event",
-      },
-      [],
-    );
-
-    assert.deepEqual(outcome, {
-      kind: "insert",
-      message: 'Created "From a subagent"',
-      note: created,
-    });
   });
 });
