@@ -12,7 +12,7 @@ pnpm install
 pnpm dev        # → http://localhost:3000
 ```
 
-That's the whole setup. **No Docker, no database, no migrations, no login, no seed step.**
+That's the whole setup. **No database, no migrations, no login, no seed step.**
 Notes live in `localStorage` and the store seeds itself on first visit. `pnpm dev` boots
 _two_ runtimes: the Next.js dev server on `:3000` and eve's agent dev server on an ephemeral
 port, proxied same-origin by `withEve` (`next.config.ts`).
