@@ -134,6 +134,9 @@ behind the Next.js origin in dev and deploys as one Vercel project in prod.
 - **Add UI only via `pnpm dlx shadcn@latest add <name>`** (shadcn/ui **base-vega** style on
   Base UI). Base UI idioms: `render` prop, not `asChild`; `data-open:` / `data-closed:`
   variants.
+- **`cacheComponents` and `partialPrefetching` are on** (`next.config.ts`). Route segment
+  config (`dynamic`, `revalidate`, …) is a build error under them; anything reading the clock or
+  the request at render time needs `"use cache"` or `<Suspense>` (see `src/app/sitemap.ts`).
 - `maxSubagentDepth: 1` in `agent/agent.ts` and the `subagent.event` unwrapping in the chat
   panel are two halves of one workaround (eve 0.22 rejects `0`). Don't "simplify" either.
 
